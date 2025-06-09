@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Маршруты перевозок</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+</head>
+<body>
+  <header>
+    <nav>
+      <ul>
+        <li><a href="index.html">Главная</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main>
+    <h1>Маршруты перевозок</h1>
+    <div id="map"></div>
+    <table id="routing-table">
+      <thead>
+        <tr>
+          <th>Маршрут</th>
+          <th>Оптимальные дороги</th>
+          <th>Время в пути</th>
+          <th>Стоимость перевозки</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </main>
+
+  <footer>
+    <p>&copy; 2024 Система управления предприятием. Все права защищены.</p>
+  </footer>
+
+  <script src="js/routing.js"></script>
+</body>
+</html>

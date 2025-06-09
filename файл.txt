@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<usecase_diagrams>
+  <!-- Use Case Diagram for /map -->
+  <diagram name="/map">
+    <actor>Пользователь</actor>
+    <usecases>
+      <usecase>Просмотр карты с предприятиями, поставщиками, потребителями</usecase>
+      <usecase>Перемещение маркера предприятия</usecase>
+      <usecase>Пересчёт маршрутов и расстояний</usecase>
+      <usecase>Отправка новых координат в СУБД</usecase>
+    </usecases>
+  </diagram>
+
+  <!-- Use Case Diagram for /Spravka -->
+  <diagram name="/Spravka">
+    <actor>Пользователь</actor>
+    <usecases>
+      <usecase>Просмотр таблиц справочника</usecase>
+      <usecase>Создание новой записи</usecase>
+      <usecase>Редактирование записи</usecase>
+      <usecase>Удаление записи</usecase>
+      <usecase>Выбор местоположения на карте (если применимо)</usecase>
+    </usecases>
+  </diagram>
+
+  <!-- Use Case Diagram for /enterprise1/&lt;id&gt; -->
+  <diagram name="/enterprise1/&lt;id&gt;">
+    <actor>Пользователь</actor>
+    <usecases>
+      <usecase>Просмотр информации о предприятии</usecase>
+      <usecase>Расчёт рентабельности</usecase>
+      <usecase>Просмотр маршрутов поставок и отгрузки</usecase>
+      <usecase>Визуализация на карте</usecase>
+    </usecases>
+  </diagram>
+</usecase_diagrams>

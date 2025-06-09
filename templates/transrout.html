@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Карта предприятий</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
+    <style>
+        #map {
+            height: 500px;
+            width: 100%;
+        }
+        .enterprise-info, .route-info {
+            margin-top: 20px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            padding: 8px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+    </style>
+</head>
+<body>
+    <h1>Карта предприятий</h1>
+    <div id="map"></div>
+
+    <div class="enterprise-info">
+
+        <h2>Информация о предприятиях</h2>
+        <table>
+            <tr>
+                <th>Наименование</th>
+                <th>Местоположение</th>
+                <th>Объем производства</th>
+                <th>Количество работников</th>
+                <th>Цена продукции</th>
+                <th>Расходы на топливо</th>
+                <th>Прочие расходы</th>
+                <th>Календарные дни</th>
+                <th>Норма запаса</th>
+            </tr>
+            {% for enterprise in enterprises %}
+            <tr>
+                <td>{{ enterprise.name }}</td>
+                <td>{{ enterprise.location }}</td>
+                <td>{{ enterprise.production_volume }}</td>
+                <td>{{ enterprise.num_workers }}</td>
+                <td>{{ enterprise.product_price }}</td>
+                <td>{{ enterprise.fuel_cost }}</td>
+                <td>{{ enterprise.other_expenses }}</td>
+                <td>{{ enterprise.calendar_days }}</td>
+                <td>{{ enterprise.stock_norm }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+    </div>
+
+    <div class="route-info">
+        <h2>Информация о маршрутах</h2>
+        <table>
+            <tr>
+                <th>Начальная точка</th>
+                <th>Конечная точка</th>
+                <th>Расстояние, км</th>
+                <th>Время в пути</th>
+                <th>Вместимость</th>
+            </tr>
+            {% for enterprise in enterprises %}
+                {% for route in enterprise.routes %}
+                <tr>
+                    <td>{{ route.start_point }}</td>
+                    <td>{{ route.end_point }}</td>
+                    <td>{{ route.distance }}</td>
+                    <td>{{ route.travel_time }}</td>
+                    <td>{{ route.capacity }}</td>
+                </tr>
+                {% endfor %}
+            {% endfor %}
+        </table>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <script>
+        // Инициализация карты, центрированной на Карелии с масштабом 8
+        var map = L.map('map').setView([62.5833, 30.1667], 8);
+
+        // Добавление базовой карты с OpenStreetMap
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
+
+        // Отображение предприятий на карте
+        {% for enterprise in enterprises %}
+        var marker = L.marker([{{ enterprise.location[0] }}, {{ enterprise.location[1] }}]).addTo(map);
+        marker.bindPopup("{{ enterprise.name }}, \
+        Производственный объем: {{enterprise.production_volume}},\
+         Количество рабочих дней в году: {{enterprise.calendar_days}}, \
+         Цена продукции: {{enterprise.product_price}} руб.");
+
+        {% endfor %}
+
+        // Отображение маршрутов на карте
+        {% for enterprise in enterprises %}
+            {% for route in enterprise.routes %}
+            var polyline = L.polyline([[{{ route.start_point[0] }}, {{ route.start_point[1] }}], [{{ route.end_point[0] }}, {{ route.end_point[1] }}]], {
+                color: 'green',
+                weight: 3,
+                opacity: 0.5
+            }).addTo(map);
+             polyline.bindPopup(`
+            Расстояние: {{route.distance}} км,\
+            Время в пути: {{route.travel_time}} ч, \
+            Вместимость: {{route.capacity}} т
+        `);
+            {% endfor %}
+        {% endfor %}
+    </script>
+</body>
+</html>

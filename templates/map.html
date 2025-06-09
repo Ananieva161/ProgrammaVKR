@@ -1,0 +1,2115 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Карта предприятий</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.8.0/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.8.0/dist/leaflet.js"></script>
+
+    <!-- Leaflet Routing Machine -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.css" />
+    <script src="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.min.js"></script>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f0f5f3;
+            color: #2c5b4b;
+        }
+
+        header {
+            background-color: #6dbd9e;
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+
+        nav ul {
+            list-style-type: none;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+        }
+
+        nav li {
+            margin: 0 10px;
+        }
+
+        nav a {
+            color: white;
+            text-decoration: none;
+        }
+
+        main {
+            padding: 20px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+
+        th, td {
+            padding: 8px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+
+        tr:hover {
+            background-color: #e5f2ed;
+        }
+
+        button {
+            background-color: #6dbd9e;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+
+        button:hover {
+            background-color: #54a685;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .table-container {
+            width: 80%;
+            margin-bottom: 20px;
+        }
+
+        .form-container {
+            display: none;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .dropdown-container {
+            margin-bottom: 20px;
+        }
+        .btn-add {
+            margin-top: 20px;
+        }
+        h1 { margin: 10px 0; }
+        #map {
+            width: 100%;
+            height: 60vh;
+            max-width: 1200px;
+            margin: auto;
+            border-radius: 8px;
+        }
+        table {
+            width: 95%;
+            max-width: 1200px;
+            margin: 15px auto;
+            border-collapse: collapse;
+            background: white;
+            border-radius: 8px;
+        }
+        th, td {
+            padding: 10px;
+            border: 1px solid #ddd;
+        }
+        th {
+            background-color: #007bff;
+            color: white;
+        }
+        button {
+            margin: 5px;
+            padding: 8px 12px;
+            border-radius: 5px;
+            border: none;
+            cursor: pointer;
+        }
+        .btn-red { background-color: #dc3545; color: white; }
+        .btn-yellow { background-color: #ffc107; }
+        .btn-clear { background-color: #6c757d; color: white; }
+    </style>
+</head>
+<header>
+    <nav>
+        <ul>
+            <li><a href="/">Главная</a></li>
+        </ul>
+    </nav>
+</header>
+<body>
+<h1>Карта предприятий</h1>
+
+<div>
+    <button class="btn-red" onclick="drawRoutes('Поставщик')">🔴 Маршруты: Поставщики</button>
+    <button class="btn-yellow" onclick="drawRoutes('Потребитель')">🟡 Маршруты: Потребители</button>
+    <button class="btn-clear" onclick="clearRoutes()">❌ Очистить маршруты</button>
+</div>
+
+<div id="map"></div>
+
+<table>
+    <thead>
+        <tr>
+            <th>Название</th>
+            <th>Тип</th>
+            <th>Населённый пункт</th>
+            <th>Стоимость</th>
+            <th>Действие</th>
+        </tr>
+    </thead>
+    <tbody id="route-tbody"></tbody>
+</table>
+
+<script>
+    var map = L.map('map').setView([60, 40], 6);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    // Leaflet Routing Machine
+    var routingControl;
+
+    // Полученные данные из Python
+    var enterprises = {{ enterprises | tojson }};
+    var timber_enterprises = {{ timber_enterprises | tojson }};
+    var consumers = {{ consumers | tojson }};
+
+    var supplierIcon = L.divIcon({ html: '<div style="width: 20px; height: 20px; background-color: green;"></div>' });
+    var consumerIcon = L.divIcon({ html: '<div style="width: 20px; height: 20px; background-color: blue; border-radius: 50%;"></div>' });
+
+    var allEnterpriseMarkers = [];
+    var allSupplierMarkers = [];
+    var allConsumerMarkers = [];
+    var activeRoutes = [];
+
+    // Функция для получения города через Nominatim
+    function fetchLocationName(lat, lon, callback) {
+        const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`;
+        fetch(url)
+            .then(res => res.json())
+            .then(data => {
+                let city = data.address?.city || data.address?.town || data.address?.village || "Неизвестно";
+                callback(city);
+            })
+            .catch(() => callback("Ошибка"));
+    }
+
+    function createMarker(entity, type) {
+        if (!entity[2]) return;
+        let lon = entity[2][0], lat = entity[2][1];
+        let marker;
+
+        if (type === "Поставщик") {
+            marker = L.marker([lat, lon], { icon: supplierIcon }).addTo(map);
+            allSupplierMarkers.push(marker);
+        } else if (type === "Потребитель") {
+            marker = L.marker([lat, lon], { icon: consumerIcon }).addTo(map);
+            allConsumerMarkers.push(marker);
+        } else {
+            marker = L.marker([lat, lon], { draggable: true }).addTo(map);
+            allEnterpriseMarkers.push(marker);
+            marker.on('dragend', function(e) {
+                var latlng = e.target.getLatLng();
+                updateMarkerLocation(entity[0], latlng.lat, latlng.lng);
+                fetchLocationName(latlng.lat, latlng.lng, function(city) {
+                    updateCityName(entity[0], city);
+                });
+            });
+        }
+
+        // Получаем название города через Nominatim
+        fetchLocationName(lat, lon, function(city) {
+            marker.bindPopup('<b>' + entity[1] + '</b><br>' + city);
+            addRow(entity[0], entity[1], type, city, marker.getLatLng(), entity[3]);
+        });
+
+        return marker;
+    }
+
+    function updateMarkerLocation(id, lat, lon) {
+        fetch('/update_location', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id, type: 'enterprise', lat, lon })
+        }).catch(err => console.error(err));
+    }
+
+    function updateCityName(id, city) {
+        let cityElem = document.getElementById('loc-' + id);
+        if (cityElem) cityElem.innerText = city;
+    }
+
+    function addRow(id, name, type, city, latlng, cost) {
+        let tr = document.createElement('tr');
+        tr.innerHTML =
+            `<td>${name}</td>
+            <td>${type}</td>
+            <td id="loc-${id}">${city}</td>
+            <td>${cost || '-'}</td>
+            <td>${type === "Предприятие" ? `<button onclick="saveNewLocation(${id}, ${latlng.lat}, ${latlng.lng})">Выбрать</button>` : ''}</td>`;
+        document.getElementById('route-tbody').appendChild(tr);
+    }
+
+    function saveNewLocation(id, lat, lon) {
+        updateMarkerLocation(id, lat, lon);
+    }
+
+    function drawRoutes(type) {
+        clearRoutes(); // Очистить старые маршруты
+
+        let markers;
+        let routeColor;
+        if (type === 'Поставщик') {
+            markers = allSupplierMarkers;
+            routeColor = 'red'; // Красные маршруты для поставщиков
+        } else {
+            markers = allConsumerMarkers;
+            routeColor = 'yellow'; // Желтые маршруты для потребителей
+        }
+
+        markers.forEach(marker => {
+            const sourceLatLng = marker.getLatLng();
+
+            // Обрабатываем все предприятия или потребителей в зависимости от типа
+            let otherMarkers = (type === 'Поставщик') ? allEnterpriseMarkers : allSupplierMarkers;
+            otherMarkers.forEach(otherMarker => {
+                const destinationLatLng = otherMarker.getLatLng();
+
+                if (!sourceLatLng || !destinationLatLng) return; // Проверка на корректность координат
+
+                routingControl = L.Routing.control({
+                    waypoints: [sourceLatLng, destinationLatLng],
+                    lineOptions: { styles: [{ color: routeColor, weight: 4 }] },
+                    router: L.Routing.osrmv1({ serviceUrl: 'https://router.project-osrm.org/route/v1' }),
+                    createMarker: () => null,
+                    addWaypoints: false,
+                    draggableWaypoints: false
+                }).addTo(map);
+                activeRoutes.push(routingControl);
+            });
+        });
+    }
+
+    function clearRoutes() {
+        activeRoutes.forEach(route => map.removeControl(route));
+        activeRoutes = [];
+    }
+
+    // Создаем маркеры для всех данных
+    enterprises.forEach(e => createMarker(e, "Предприятие"));
+    timber_enterprises.forEach(t => createMarker(t, "Поставщик"));
+    consumers.forEach(c => createMarker(c, "Потребитель"));
+</script>
+</body>
+</html>
+
+<!--<!DOCTYPE html>-->
+<!--<html lang="ru">-->
+<!--<head>-->
+<!--    <meta charset="UTF-8">-->
+<!--    <title>Карта предприятий</title>-->
+<!--    <meta name="viewport" content="width=device-width, initial-scale=1.0">-->
+
+<!--    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.8.0/dist/leaflet.css" />-->
+<!--    <script src="https://unpkg.com/leaflet@1.8.0/dist/leaflet.js"></script>-->
+
+<!--    &lt;!&ndash; Leaflet Routing Machine &ndash;&gt;-->
+<!--    <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.css" />-->
+<!--    <script src="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.min.js"></script>-->
+
+<!--    <style>-->
+<!--        body {-->
+<!--            font-family: Arial, sans-serif;-->
+<!--            background-color: #f4f4f4;-->
+<!--            text-align: center;-->
+<!--            margin: 0;-->
+<!--            padding: 0;-->
+<!--        }-->
+<!--        h1 { margin: 10px 0; }-->
+<!--        #map {-->
+<!--            width: 100%;-->
+<!--            height: 60vh;-->
+<!--            max-width: 1200px;-->
+<!--            margin: auto;-->
+<!--            border-radius: 8px;-->
+<!--        }-->
+<!--        table {-->
+<!--            width: 95%;-->
+<!--            max-width: 1200px;-->
+<!--            margin: 15px auto;-->
+<!--            border-collapse: collapse;-->
+<!--            background: white;-->
+<!--            border-radius: 8px;-->
+<!--        }-->
+<!--        th, td {-->
+<!--            padding: 10px;-->
+<!--            border: 1px solid #ddd;-->
+<!--        }-->
+<!--        th {-->
+<!--            background-color: #007bff;-->
+<!--            color: white;-->
+<!--        }-->
+<!--        button {-->
+<!--            margin: 5px;-->
+<!--            padding: 8px 12px;-->
+<!--            border-radius: 5px;-->
+<!--            border: none;-->
+<!--            cursor: pointer;-->
+<!--        }-->
+<!--        .btn-red { background-color: #dc3545; color: white; }-->
+<!--        .btn-yellow { background-color: #ffc107; }-->
+<!--        .btn-clear { background-color: #6c757d; color: white; }-->
+<!--    </style>-->
+<!--</head>-->
+<!--<body>-->
+<!--<h1>Карта предприятий</h1>-->
+
+<!--<div>-->
+<!--    <button class="btn-red" onclick="drawSupplierRoutes()">🔴 Маршруты: Поставщики</button>-->
+<!--    <button class="btn-yellow" onclick="drawConsumerRoutes()">🟡 Маршруты: Потребители</button>-->
+<!--    <button class="btn-clear" onclick="clearRoutes()">❌ Очистить маршруты</button>-->
+<!--</div>-->
+
+<!--<div id="map"></div>-->
+
+<!--<table>-->
+<!--    <thead>-->
+<!--        <tr>-->
+<!--            <th>Название</th>-->
+<!--            <th>Тип</th>-->
+<!--            <th>Населённый пункт</th>-->
+<!--            <th>Стоимость</th>-->
+<!--            <th>Действие</th>-->
+<!--        </tr>-->
+<!--    </thead>-->
+<!--    <tbody id="route-tbody"></tbody>-->
+<!--</table>-->
+
+<!--<script>-->
+<!--    var map = L.map('map').setView([60, 40], 6);-->
+<!--    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {-->
+<!--        attribution: '&copy; OpenStreetMap contributors'-->
+<!--    }).addTo(map);-->
+
+<!--    var enterprises = {{ enterprises | tojson }};-->
+<!--    var timber_enterprises = {{ timber_enterprises | tojson }};-->
+<!--    var consumers = {{ consumers | tojson }};-->
+
+<!--    var supplierIcon = L.divIcon({ html: '<div style="width: 20px; height: 20px; background-color: green;"></div>' });-->
+<!--    var consumerIcon = L.divIcon({ html: '<div style="width: 20px; height: 20px; background-color: blue; border-radius: 50%;"></div>' });-->
+
+<!--    var allEnterpriseMarkers = [];-->
+<!--    var allSupplierMarkers = [];-->
+<!--    var allConsumerMarkers = [];-->
+<!--    var activeRoutes = [];-->
+
+<!--    function createMarker(entity, type) {-->
+<!--        if (!entity[2]) return;-->
+<!--        let lon = entity[2][0], lat = entity[2][1];-->
+<!--        let marker;-->
+
+<!--        if (type === "Поставщик") {-->
+<!--            marker = L.marker([lat, lon], { icon: supplierIcon }).addTo(map);-->
+<!--            allSupplierMarkers.push(marker);-->
+<!--        } else if (type === "Потребитель") {-->
+<!--            marker = L.marker([lat, lon], { icon: consumerIcon }).addTo(map);-->
+<!--            allConsumerMarkers.push(marker);-->
+<!--        } else {-->
+<!--            marker = L.marker([lat, lon], { draggable: true }).addTo(map);-->
+<!--            allEnterpriseMarkers.push(marker);-->
+
+<!--            marker.on('dragend', function(e) {-->
+<!--                var latlng = e.target.getLatLng();-->
+<!--                updateMarkerLocation(entity[0], latlng.lat, latlng.lng);-->
+<!--                updateCityName(entity[0], latlng.lat, latlng.lng);-->
+<!--            });-->
+<!--        }-->
+
+<!--        fetchLocationName(lat, lon, function(city) {-->
+<!--            marker.bindPopup('<b>' + entity[1] + '</b><br>' + city);-->
+<!--            addRow(entity[0], entity[1], type, city, marker.getLatLng(), entity[3]);-->
+<!--        });-->
+
+<!--        return marker;-->
+<!--    }-->
+
+<!--    function fetchLocationName(lat, lon, callback) {-->
+<!--        const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`;-->
+<!--        fetch(url)-->
+<!--            .then(res => res.json())-->
+<!--            .then(data => {-->
+<!--                let city = data.address?.city || data.address?.town || data.address?.village || "Неизвестно";-->
+<!--                callback(city);-->
+<!--            })-->
+<!--            .catch(() => callback("Ошибка"));-->
+<!--    }-->
+
+<!--    function updateMarkerLocation(id, lat, lon) {-->
+<!--        fetch('/update_location', {-->
+<!--            method: 'POST',-->
+<!--            headers: { 'Content-Type': 'application/json' },-->
+<!--            body: JSON.stringify({ id, type: 'enterprise', lat, lon })-->
+<!--        }).catch(err => console.error(err));-->
+<!--    }-->
+
+<!--    function updateCityName(id, lat, lon) {-->
+<!--        fetchLocationName(lat, lon, city => {-->
+<!--            document.getElementById(`loc-${id}`).innerText = city;-->
+<!--        });-->
+<!--    }-->
+
+<!--    function addRow(id, name, type, city, latlng, cost) {-->
+<!--        let tr = document.createElement('tr');-->
+<!--        tr.innerHTML =-->
+<!--            `<td>${name}</td>-->
+<!--            <td>${type}</td>-->
+<!--            <td id="loc-${id}">${city}</td>-->
+<!--            <td>${cost || '-'}</td>-->
+<!--            <td>${type === "Предприятие" ? `<button onclick="saveNewLocation(${id}, ${latlng.lat}, ${latlng.lng})">Выбрать</button>` : ''}</td>`;-->
+<!--        document.getElementById('route-tbody').appendChild(tr);-->
+<!--    }-->
+
+<!--    function saveNewLocation(id, lat, lon) {-->
+<!--        updateMarkerLocation(id, lat, lon);-->
+<!--    }-->
+
+<!--    function drawSupplierRoutes() {-->
+<!--        allEnterpriseMarkers.forEach(ent => {-->
+<!--            const entLatLng = ent.getLatLng();-->
+<!--            allSupplierMarkers.forEach(sup => {-->
+<!--                const supLatLng = sup.getLatLng();-->
+<!--                if (!entLatLng || !supLatLng) return; // Проверка на корректность координат-->
+
+<!--                const control = L.Routing.control({-->
+<!--                    waypoints: [[supLatLng.lat, supLatLng.lng], [entLatLng.lat, entLatLng.lng]],-->
+<!--                    lineOptions: { styles: [{ color: 'red', weight: 4 }] },-->
+<!--                    router: L.Routing.osrmv1({ serviceUrl: 'https://router.project-osrm.org/route/v1' }),-->
+<!--                    createMarker: () => null,-->
+<!--                    addWaypoints: false,-->
+<!--                    draggableWaypoints: false-->
+<!--                }).addTo(map);-->
+<!--                activeRoutes.push(control);-->
+<!--                addCarAnimation(control, "перевозит елки");-->
+<!--            });-->
+<!--        });-->
+<!--    }-->
+
+<!--    function drawConsumerRoutes() {-->
+<!--        allEnterpriseMarkers.forEach(ent => {-->
+<!--            const entLatLng = ent.getLatLng();-->
+<!--            allConsumerMarkers.forEach(con => {-->
+<!--                const conLatLng = con.getLatLng();-->
+<!--                if (!entLatLng || !conLatLng) return; // Проверка на корректность координат-->
+
+<!--                const control = L.Routing.control({-->
+<!--                    waypoints: [[entLatLng.lat, entLatLng.lng], [conLatLng.lat, conLatLng.lng]],-->
+<!--                    lineOptions: { styles: [{ color: 'yellow', weight: 4 }] },-->
+<!--                    router: L.Routing.osrmv1({ serviceUrl: 'https://router.project-osrm.org/route/v1' }),-->
+<!--                    createMarker: () => null,-->
+<!--                    addWaypoints: false,-->
+<!--                    draggableWaypoints: false-->
+<!--                }).addTo(map);-->
+<!--                activeRoutes.push(control);-->
+<!--                addCarAnimation(control, "перевозит шкаф");-->
+<!--            });-->
+<!--        });-->
+<!--    }-->
+
+<!--    function addCarAnimation(control, cargoType) {-->
+<!--        const carIcon = L.icon({-->
+<!--            iconUrl: '/path_to_car_icon.png',-->
+<!--            iconSize: [32, 32]-->
+<!--        });-->
+<!--        const carMarker = L.marker(control.getWaypoints()[0], { icon: carIcon }).addTo(map);-->
+
+<!--        let currentIndex = 0;-->
+<!--        const route = control.getWaypoints();-->
+<!--        function moveCar() {-->
+<!--            if (currentIndex < route.length) {-->
+<!--                carMarker.setLatLng(route[currentIndex]);-->
+<!--                currentIndex++;-->
+<!--                setTimeout(moveCar, 1000); // Анимация по пути-->
+<!--            }-->
+<!--        }-->
+<!--        moveCar();-->
+<!--    }-->
+
+<!--    function clearRoutes() {-->
+<!--        activeRoutes.forEach(route => map.removeControl(route));-->
+<!--        activeRoutes = [];-->
+<!--    }-->
+
+<!--    enterprises.forEach(e => createMarker(e, "Предприятие"));-->
+<!--    timber_enterprises.forEach(t => createMarker(t, "Поставщик"));-->
+<!--    consumers.forEach(c => createMarker(c, "Потребитель"));-->
+<!--</script>-->
+<!--</body>-->
+<!--</html>-->
+
+<!--<!DOCTYPE html>-->
+<!--<html lang="ru">-->
+<!--<head>-->
+<!--    <meta charset="UTF-8">-->
+<!--    <title>Карта предприятий</title>-->
+<!--    <meta name="viewport" content="width=device-width, initial-scale=1.0">-->
+
+<!--    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.8.0/dist/leaflet.css" />-->
+<!--    <script src="https://unpkg.com/leaflet@1.8.0/dist/leaflet.js"></script>-->
+
+<!--    &lt;!&ndash; Leaflet Routing Machine &ndash;&gt;-->
+<!--    <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.css" />-->
+<!--    <script src="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.min.js"></script>-->
+
+<!--    <style>-->
+<!--        body {-->
+<!--            font-family: Arial, sans-serif;-->
+<!--            background-color: #f4f4f4;-->
+<!--            text-align: center;-->
+<!--            margin: 0;-->
+<!--            padding: 0;-->
+<!--        }-->
+<!--        h1 { margin: 10px 0; }-->
+<!--        #map {-->
+<!--            width: 100%;-->
+<!--            height: 60vh;-->
+<!--            max-width: 1200px;-->
+<!--            margin: auto;-->
+<!--            border-radius: 8px;-->
+<!--        }-->
+<!--        table {-->
+<!--            width: 95%;-->
+<!--            max-width: 1200px;-->
+<!--            margin: 15px auto;-->
+<!--            border-collapse: collapse;-->
+<!--            background: white;-->
+<!--            border-radius: 8px;-->
+<!--        }-->
+<!--        th, td {-->
+<!--            padding: 10px;-->
+<!--            border: 1px solid #ddd;-->
+<!--        }-->
+<!--        th {-->
+<!--            background-color: #007bff;-->
+<!--            color: white;-->
+<!--        }-->
+<!--        button {-->
+<!--            margin: 5px;-->
+<!--            padding: 8px 12px;-->
+<!--            border-radius: 5px;-->
+<!--            border: none;-->
+<!--            cursor: pointer;-->
+<!--        }-->
+<!--        .btn-red { background-color: #dc3545; color: white; }-->
+<!--        .btn-yellow { background-color: #ffc107; }-->
+<!--        .btn-clear { background-color: #6c757d; color: white; }-->
+<!--    </style>-->
+<!--</head>-->
+<!--<body>-->
+<!--<h1>Карта предприятий</h1>-->
+
+<!--<div>-->
+<!--    <button class="btn-red" onclick="drawSupplierRoutes()">🔴 Маршруты: Поставщики</button>-->
+<!--    <button class="btn-yellow" onclick="drawConsumerRoutes()">🟡 Маршруты: Потребители</button>-->
+<!--    <button class="btn-clear" onclick="clearRoutes()">❌ Очистить маршруты</button>-->
+<!--</div>-->
+
+<!--<div id="map"></div>-->
+
+<!--<table>-->
+<!--    <thead>-->
+<!--        <tr>-->
+<!--            <th>Название</th>-->
+<!--            <th>Тип</th>-->
+<!--            <th>Населённый пункт</th>-->
+<!--            <th>Стоимость</th>-->
+<!--            <th>Действие</th>-->
+<!--        </tr>-->
+<!--    </thead>-->
+<!--    <tbody id="route-tbody"></tbody>-->
+<!--</table>-->
+
+<!--<script>-->
+<!--    var map = L.map('map').setView([60, 40], 6);-->
+<!--    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {-->
+<!--        attribution: '&copy; OpenStreetMap contributors'-->
+<!--    }).addTo(map);-->
+
+<!--    var enterprises = {{ enterprises | tojson }};-->
+<!--    var timber_enterprises = {{ timber_enterprises | tojson }};-->
+<!--    var consumers = {{ consumers | tojson }};-->
+
+<!--    var supplierIcon = L.divIcon({ html: '<div style="width: 20px; height: 20px; background-color: green;"></div>' });-->
+<!--    var consumerIcon = L.divIcon({ html: '<div style="width: 20px; height: 20px; background-color: blue; border-radius: 50%;"></div>' });-->
+
+<!--    var allEnterpriseMarkers = [];-->
+<!--    var allSupplierMarkers = [];-->
+<!--    var allConsumerMarkers = [];-->
+<!--    var activeRoutes = [];-->
+
+<!--    function createMarker(entity, type) {-->
+<!--        if (!entity[2]) return;-->
+<!--        let lon = entity[2][0], lat = entity[2][1];-->
+<!--        let marker;-->
+
+<!--        if (type === "Поставщик") {-->
+<!--            marker = L.marker([lat, lon], { icon: supplierIcon }).addTo(map);-->
+<!--            allSupplierMarkers.push(marker);-->
+<!--        } else if (type === "Потребитель") {-->
+<!--            marker = L.marker([lat, lon], { icon: consumerIcon }).addTo(map);-->
+<!--            allConsumerMarkers.push(marker);-->
+<!--        } else {-->
+<!--            marker = L.marker([lat, lon], { draggable: true }).addTo(map);-->
+<!--            allEnterpriseMarkers.push(marker);-->
+
+<!--            marker.on('dragend', function(e) {-->
+<!--                var latlng = e.target.getLatLng();-->
+<!--                updateMarkerLocation(entity[0], latlng.lat, latlng.lng);-->
+<!--                updateCityName(entity[0], latlng.lat, latlng.lng);-->
+<!--            });-->
+<!--        }-->
+
+<!--        fetchLocationName(lat, lon, function(city) {-->
+<!--            marker.bindPopup(`<b>${entity[1]}</b><br>${city}`);-->
+<!--            addRow(entity[0], entity[1], type, city, marker.getLatLng(), entity[3]);-->
+<!--        });-->
+
+<!--        return marker;-->
+<!--    }-->
+
+<!--    function fetchLocationName(lat, lon, callback) {-->
+<!--        const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`;-->
+<!--        fetch(url)-->
+<!--            .then(res => res.json())-->
+<!--            .then(data => {-->
+<!--                let city = data.address?.city || data.address?.town || data.address?.village || "Неизвестно";-->
+<!--                callback(city);-->
+<!--            })-->
+<!--            .catch(() => callback("Ошибка"));-->
+<!--    }-->
+
+<!--    function updateMarkerLocation(id, lat, lon) {-->
+<!--        fetch('/update_location', {-->
+<!--            method: 'POST',-->
+<!--            headers: { 'Content-Type': 'application/json' },-->
+<!--            body: JSON.stringify({ id, type: 'enterprise', lat, lon })-->
+<!--        }).catch(err => console.error(err));-->
+<!--    }-->
+
+<!--    function updateCityName(id, lat, lon) {-->
+<!--        fetchLocationName(lat, lon, city => {-->
+<!--            document.getElementById(`loc-${id}`).innerText = city;-->
+<!--        });-->
+<!--    }-->
+
+<!--    function addRow(id, name, type, city, latlng, cost) {-->
+<!--        let tr = document.createElement('tr');-->
+<!--        tr.innerHTML = `-->
+<!--            <td>${name}</td>-->
+<!--            <td>${type}</td>-->
+<!--            <td id="loc-${id}">${city}</td>-->
+<!--            <td>${cost || '-'}</td>-->
+<!--            <td>${type === "Предприятие" ? `<button onclick="saveNewLocation(${id}, ${latlng.lat}, ${latlng.lng})">Выбрать</button>` : ''}</td>-->
+<!--        `;-->
+<!--        document.getElementById('route-tbody').appendChild(tr);-->
+<!--    }-->
+
+<!--    function saveNewLocation(id, lat, lon) {-->
+<!--        updateMarkerLocation(id, lat, lon);-->
+<!--    }-->
+
+<!--function drawSupplierRoutes() {-->
+<!--    allEnterpriseMarkers.forEach(ent => {-->
+<!--        const entLatLng = ent.getLatLng();-->
+<!--        allSupplierMarkers.forEach(sup => {-->
+<!--            const supLatLng = sup.getLatLng();-->
+<!--            if (!entLatLng || !supLatLng) return; // Проверка на корректность координат-->
+
+<!--            // не меняя порядок lat и lon при создании, но преобразуем их в нужный формат-->
+<!--            console.log(`Поставщик: ${supLatLng} - Предприятие: ${entLatLng}`);-->
+<!--            const control = L.Routing.control({-->
+<!--                waypoints: [[supLatLng.lat, supLatLng.lng], [entLatLng.lat, entLatLng.lng]], // порядок lat, lon-->
+<!--                lineOptions: { styles: [{ color: 'red', weight: 4 }] },-->
+<!--                router: L.Routing.osrmv1({ serviceUrl: 'https://router.project-osrm.org/route/v1' }),-->
+<!--                createMarker: () => null,-->
+<!--                addWaypoints: false,-->
+<!--                draggableWaypoints: false-->
+<!--            }).addTo(map);-->
+<!--            activeRoutes.push(control);-->
+<!--        });-->
+<!--    });-->
+<!--}-->
+
+<!--function drawConsumerRoutes() {-->
+<!--    allEnterpriseMarkers.forEach(ent => {-->
+<!--        const entLatLng = ent.getLatLng();-->
+<!--        allConsumerMarkers.forEach(con => {-->
+<!--            const conLatLng = con.getLatLng();-->
+<!--            if (!entLatLng || !conLatLng) return; // Проверка на корректность координат-->
+
+<!--            console.log(`Потребитель: ${conLatLng} - Предприятие: ${entLatLng}`);-->
+<!--            const control = L.Routing.control({-->
+<!--                waypoints: [[entLatLng.lat, entLatLng.lng], [conLatLng.lat, conLatLng.lng]], // порядок lat, lon-->
+<!--                lineOptions: { styles: [{ color: 'yellow', weight: 4 }] },-->
+<!--                router: L.Routing.osrmv1({ serviceUrl: 'https://router.project-osrm.org/route/v1' }),-->
+<!--                createMarker: () => null,-->
+<!--                addWaypoints: false,-->
+<!--                draggableWaypoints: false-->
+<!--            }).addTo(map);-->
+<!--            activeRoutes.push(control);-->
+<!--        });-->
+<!--    });-->
+<!--}-->
+
+
+<!--    function clearRoutes() {-->
+<!--        activeRoutes.forEach(route => map.removeControl(route));-->
+<!--        activeRoutes = [];-->
+<!--    }-->
+
+<!--    enterprises.forEach(e => createMarker(e, "Предприятие"));-->
+<!--    timber_enterprises.forEach(t => createMarker(t, "Поставщик"));-->
+<!--    consumers.forEach(c => createMarker(c, "Потребитель"));-->
+<!--</script>-->
+<!--</body>-->
+<!--</html>-->
+
+
+<!--<!DOCTYPE html>-->
+<!--<html lang="ru">-->
+<!--<head>-->
+<!--    <meta charset="UTF-8">-->
+<!--    <meta name="viewport" content="width=device-width, initial-scale=1.0">-->
+<!--    <title>Карта предприятий</title>-->
+<!--    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.8.0/dist/leaflet.css" />-->
+<!--    <script src="https://unpkg.com/leaflet@1.8.0/dist/leaflet.js"></script>-->
+
+<!--    <style>-->
+<!--        body {-->
+<!--            font-family: Arial, sans-serif;-->
+<!--            margin: 0;-->
+<!--            padding: 0;-->
+<!--            background-color: #f4f4f4;-->
+<!--            text-align: center;-->
+<!--        }-->
+<!--        h1 {-->
+<!--            margin-top: 10px;-->
+<!--        }-->
+<!--        #map {-->
+<!--            width: 100%;-->
+<!--            height: 60vh;-->
+<!--            max-width: 1200px;-->
+<!--            margin: auto;-->
+<!--            border-radius: 8px;-->
+<!--        }-->
+<!--        table {-->
+<!--            width: 95%;-->
+<!--            max-width: 1200px;-->
+<!--            margin: 15px auto;-->
+<!--            border-collapse: collapse;-->
+<!--            background: white;-->
+<!--            border-radius: 8px;-->
+<!--            overflow: hidden;-->
+<!--        }-->
+<!--        th, td {-->
+<!--            padding: 10px;-->
+<!--            border: 1px solid #ddd;-->
+<!--            text-align: center;-->
+<!--        }-->
+<!--        th {-->
+<!--            background-color: #007bff;-->
+<!--            color: white;-->
+<!--        }-->
+<!--    </style>-->
+<!--</head>-->
+<!--<body>-->
+<!--<h1>Карта предприятий</h1>-->
+<!--<div id="map"></div>-->
+
+<!--<table>-->
+<!--    <thead>-->
+<!--        <tr>-->
+<!--            <th>Название</th>-->
+<!--            <th>Тип</th>-->
+<!--            <th>Населённый пункт</th>-->
+<!--            <th>Стоимость</th>-->
+<!--            <th>Действие</th>-->
+<!--        </tr>-->
+<!--    </thead>-->
+<!--    <tbody id="route-tbody"></tbody>-->
+<!--</table>-->
+
+<!--<script>-->
+<!--    var map = L.map('map').setView([60, 40], 6);-->
+<!--    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {-->
+<!--        attribution: '&copy; OpenStreetMap contributors'-->
+<!--    }).addTo(map);-->
+
+<!--    var enterprises = {{ enterprises | tojson }};-->
+<!--    var timber_enterprises = {{ timber_enterprises | tojson }};-->
+<!--    var consumers = {{ consumers | tojson }};-->
+
+<!--    var supplierIcon = L.divIcon({ html: '<div style="width: 20px; height: 20px; background-color: green;"></div>' });-->
+<!--    var consumerIcon = L.divIcon({ html: '<div style="width: 20px; height: 20px; background-color: blue; border-radius: 50%;"></div>' });-->
+
+<!--    var allEnterpriseMarkers = [];-->
+<!--    var allSupplierMarkers = [];-->
+<!--    var allConsumerMarkers = [];-->
+
+<!--    function createMarker(entity, type) {-->
+<!--        if (!entity[2]) return;-->
+<!--        let lon = entity[2][0], lat = entity[2][1];-->
+<!--        let marker;-->
+
+<!--        if (type === "Поставщик") {-->
+<!--            marker = L.marker([lat, lon], { icon: supplierIcon }).addTo(map);-->
+<!--            allSupplierMarkers.push(marker);-->
+<!--        } else if (type === "Потребитель") {-->
+<!--            marker = L.marker([lon, lat], { icon: consumerIcon }).addTo(map);-->
+<!--            allConsumerMarkers.push(marker);-->
+<!--        } else {-->
+<!--            marker = L.marker([lon, lat], { draggable: true }).addTo(map);-->
+<!--            allEnterpriseMarkers.push(marker);-->
+
+<!--            marker.on('dragend', function(e) {-->
+<!--                var latlng = e.target.getLatLng();-->
+<!--                updateMarkerLocation(entity[0], latlng.lat, latlng.lng);-->
+<!--                updateCityName(entity[0], latlng.lat, latlng.lng);-->
+<!--            });-->
+<!--        }-->
+
+<!--        fetchLocationName(lat, lon, function(city) {-->
+<!--            marker.bindPopup(`<b>${entity[1]}</b><br>${city}`);-->
+<!--            addRow(entity[0], entity[1], type, city, marker.getLatLng(), entity[3]);-->
+<!--        });-->
+
+<!--        return marker;-->
+<!--    }-->
+<!--function fetchLocationName(lat, lon, callback) {-->
+<!--    const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`;-->
+
+<!--    fetch(url)-->
+<!--        .then(res => {-->
+<!--            if (!res.ok) {-->
+<!--                throw new Error("Сетевая ошибка");-->
+<!--            }-->
+<!--            return res.json();-->
+<!--        })-->
+<!--        .then(data => {-->
+<!--            if (data.address) {-->
+<!--                let city = data.address.city || data.address.town || data.address.village || "Неизвестно";-->
+<!--                callback(city);-->
+<!--            } else {-->
+<!--                callback("Неизвестно");-->
+<!--            }-->
+<!--        })-->
+<!--        .catch(err => {-->
+<!--            console.error("Ошибка при получении названия локации:", err);-->
+<!--            callback("Ошибка");-->
+<!--        });-->
+<!--}-->
+
+<!--&lt;!&ndash;    function fetchLocationName(lat, lon, callback) {&ndash;&gt;-->
+<!--&lt;!&ndash;        fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`)&ndash;&gt;-->
+<!--&lt;!&ndash;            .then(res => res.json())&ndash;&gt;-->
+<!--&lt;!&ndash;            .then(data => {&ndash;&gt;-->
+<!--&lt;!&ndash;                let city = data.address?.city || data.address?.town || data.address?.village || "Неизвестно";&ndash;&gt;-->
+<!--&lt;!&ndash;                callback(city);&ndash;&gt;-->
+<!--&lt;!&ndash;            })&ndash;&gt;-->
+<!--&lt;!&ndash;            .catch(() => callback("Ошибка"));&ndash;&gt;-->
+<!--&lt;!&ndash;    }&ndash;&gt;-->
+
+<!--    function updateMarkerLocation(id, lat, lon) {-->
+<!--        fetch('/update_location', {-->
+<!--            method: 'POST',-->
+<!--            headers: { 'Content-Type': 'application/json' },-->
+<!--            body: JSON.stringify({ id, type: 'enterprise', lat, lon })-->
+<!--        })-->
+<!--        .then(res => res.json())-->
+<!--        .then(data => console.log(data.message))-->
+<!--        .catch(err => console.error(err));-->
+<!--    }-->
+
+<!--    function updateCityName(id, lat, lon) {-->
+<!--        fetchLocationName(lat, lon, city => {-->
+<!--            document.getElementById(`loc-${id}`).innerText = city;-->
+<!--        });-->
+<!--    }-->
+
+<!--    function addRow(id, name, type, city, latlng, cost) {-->
+<!--        let tr = document.createElement('tr');-->
+<!--        tr.innerHTML = `-->
+<!--            <td>${name}</td>-->
+<!--            <td>${type}</td>-->
+<!--            <td id="loc-${id}">${city}</td>-->
+<!--            <td>${cost || '-'}</td>-->
+<!--            <td>${type === "Предприятие" ? `<button onclick="saveNewLocation(${id}, ${latlng.lat}, ${latlng.lng})">Выбрать</button>` : ''}</td>-->
+<!--        `;-->
+<!--        document.getElementById('route-tbody').appendChild(tr);-->
+<!--    }-->
+
+<!--    function saveNewLocation(id, lat, lon) {-->
+<!--        updateMarkerLocation(id, lat, lon);-->
+<!--    }-->
+
+<!--&lt;!&ndash;    function drawRoute(startLatLng, endLatLng, color) {&ndash;&gt;-->
+<!--&lt;!&ndash;        let url = `https://router.project-osrm.org/route/v1/driving/${startLatLng.lng},${startLatLng.lat};${endLatLng.lng},${endLatLng.lat}?overview=full&geometries=geojson`;&ndash;&gt;-->
+<!--&lt;!&ndash;        fetch(url)&ndash;&gt;-->
+<!--&lt;!&ndash;            .then(res => res.json())&ndash;&gt;-->
+<!--&lt;!&ndash;            .then(data => {&ndash;&gt;-->
+<!--&lt;!&ndash;                if (data.routes?.length > 0) {&ndash;&gt;-->
+<!--&lt;!&ndash;                    L.geoJSON(data.routes[0].geometry, { style: { color, weight: 4 } }).addTo(map);&ndash;&gt;-->
+<!--&lt;!&ndash;                }&ndash;&gt;-->
+<!--&lt;!&ndash;            });&ndash;&gt;-->
+<!--&lt;!&ndash;    }&ndash;&gt;-->
+
+<!--&lt;!&ndash;    enterprises.forEach(e => createMarker(e, "Предприятие"));&ndash;&gt;-->
+<!--&lt;!&ndash;    timber_enterprises.forEach(t => createMarker(t, "Поставщик"));&ndash;&gt;-->
+<!--&lt;!&ndash;    consumers.forEach(c => createMarker(c, "Потребитель"));&ndash;&gt;-->
+
+<!--&lt;!&ndash;    setTimeout(() => {&ndash;&gt;-->
+<!--&lt;!&ndash;        allEnterpriseMarkers.forEach(ent => {&ndash;&gt;-->
+<!--&lt;!&ndash;            allSupplierMarkers.forEach(sup => {&ndash;&gt;-->
+<!--&lt;!&ndash;                drawRoute(ent.getLatLng(), sup.getLatLng(), 'red');&ndash;&gt;-->
+<!--&lt;!&ndash;            });&ndash;&gt;-->
+<!--&lt;!&ndash;            allConsumerMarkers.forEach(con => {&ndash;&gt;-->
+<!--&lt;!&ndash;                drawRoute(ent.getLatLng(), con.getLatLng(), 'yellow');&ndash;&gt;-->
+<!--&lt;!&ndash;            });&ndash;&gt;-->
+<!--&lt;!&ndash;        });&ndash;&gt;-->
+<!--&lt;!&ndash;    }, 100);&ndash;&gt;-->
+<!--function drawRoute(startLatLng, endLatLng, color) {-->
+<!--    const url = `https://router.project-osrm.org/route/v1/driving/${startLatLng.lng},${startLatLng.lat};${endLatLng.lng},${endLatLng.lat}?overview=full&geometries=geojson`;-->
+<!--    fetch(url)-->
+<!--        .then(res => res.json())-->
+<!--        .then(data => {-->
+<!--            if (data.routes && data.routes.length > 0) {-->
+<!--                L.geoJSON(data.routes[0].geometry, { style: { color, weight: 4 } }).addTo(map);-->
+<!--            } else {-->
+<!--                console.error("Маршрут не найден для:", { startLatLng, endLatLng }); // добавлено отладочное сообщение-->
+<!--            }-->
+<!--        })-->
+<!--        .catch(err => {-->
+<!--            console.error("Ошибка при запросе маршрута:", err);-->
+<!--        });-->
+<!--}-->
+
+<!--// Создание маркеров-->
+<!--enterprises.forEach(e => createMarker(e, 'Предприятие'));-->
+<!--timber_enterprises.forEach(t => createMarker(t, 'Поставщик'));-->
+<!--consumers.forEach(c => createMarker(c, 'Потребитель'));-->
+
+<!--setTimeout(() => {-->
+<!--    // Прокладываем маршруты между предприятиями и поставщиками-->
+<!--    allEnterpriseMarkers.forEach(ent => {-->
+<!--        allSupplierMarkers.forEach(sup => {-->
+<!--            if (ent.getLatLng() && sup.getLatLng()) { // Проверяем наличие координат-->
+<!--                drawRoute(ent.getLatLng(), sup.getLatLng(), 'red');-->
+<!--            } else {-->
+<!--                console.warn("Отсутствуют координаты для предприятием или поставщиком");-->
+<!--            }-->
+<!--        });-->
+<!--        // Прокладываем маршруты между предприятиями и потребителями-->
+<!--        allConsumerMarkers.forEach(con => {-->
+<!--            if (ent.getLatLng() && con.getLatLng()) { // Проверяем наличие координат-->
+<!--                drawRoute(ent.getLatLng(), con.getLatLng(), 'yellow');-->
+<!--            } else {-->
+<!--                console.warn("Отсутствуют координаты для предприятия или потребителя");-->
+<!--            }-->
+<!--        });-->
+<!--    });-->
+<!--}, 100); // Таймаут, чтобы дать время на создание маркеров-->
+
+<!--</script>-->
+<!--</body>-->
+<!--</html>-->
+
+<!--<!DOCTYPE html>-->
+<!--<html lang="ru">-->
+<!--<head>-->
+<!--    <meta charset="UTF-8">-->
+<!--    <meta name="viewport" content="width=device-width, initial-scale=1.0">-->
+<!--    <title>Карта предприятий</title>-->
+<!--    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.8.0/dist/leaflet.css" />-->
+<!--    <script src="https://unpkg.com/leaflet@1.8.0/dist/leaflet.js"></script>-->
+
+<!--    <style>-->
+<!--        body {-->
+<!--            font-family: Arial, sans-serif;-->
+<!--            margin: 0;-->
+<!--            padding: 0;-->
+<!--            text-align: center;-->
+<!--            background-color: #f4f4f4;-->
+<!--        }-->
+<!--        h1 {-->
+<!--            margin-top: 10px;-->
+<!--        }-->
+<!--        #map {-->
+<!--            width: 100%;-->
+<!--            height: 60vh;-->
+<!--            max-width: 1200px;-->
+<!--            margin: auto;-->
+<!--            border-radius: 8px;-->
+<!--        }-->
+<!--        table {-->
+<!--            width: 95%;-->
+<!--            max-width: 1200px;-->
+<!--            margin: 15px auto;-->
+<!--            border-collapse: collapse;-->
+<!--            background: white;-->
+<!--            border-radius: 8px;-->
+<!--            overflow: hidden;-->
+<!--        }-->
+<!--        th, td {-->
+<!--            padding: 10px;-->
+<!--            border: 1px solid #ddd;-->
+<!--            text-align: center;-->
+<!--        }-->
+<!--        th {-->
+<!--            background-color: #007bff;-->
+<!--            color: white;-->
+<!--        }-->
+<!--        @media (max-width: 768px) {-->
+<!--            #map { height: 50vh; }-->
+<!--            th, td { font-size: 14px; }-->
+<!--        }-->
+<!--    </style>-->
+<!--</head>-->
+<!--<body>-->
+<!--<header>-->
+<!--    <nav>-->
+<!--        <ul>-->
+<!--            <li><a href="/">Главная</a></li>-->
+<!--        </ul>-->
+<!--    </nav>-->
+<!--</header>-->
+<!--<h1>Карта предприятий</h1>-->
+<!--<div id="map"></div>-->
+
+<!--<table id="route-table">-->
+<!--    <thead>-->
+<!--        <tr>-->
+<!--            <th>Название</th>-->
+<!--            <th>Тип</th>-->
+<!--            <th>Населённый пункт</th>-->
+<!--            <th>Стоимость</th>-->
+<!--        </tr>-->
+<!--    </thead>-->
+<!--    <tbody id="route-tbody"></tbody>-->
+<!--</table>-->
+
+<!--<script>-->
+<!--    var map = L.map('map', { maxZoom: 18 }).setView([60, 40], 6);-->
+<!--    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {-->
+<!--        attribution: '&copy; OpenStreetMap contributors'-->
+<!--    }).addTo(map);-->
+
+<!--    var enterprises = {{ enterprises | tojson }};-->
+<!--    var timber_enterprises = {{ timber_enterprises | tojson }};-->
+<!--    var consumers = {{ consumers | tojson }};-->
+
+<!--    var supplierIcon = L.divIcon({-->
+<!--        className: 'supplier-icon',-->
+<!--        html: '<div style="width: 20px; height: 20px; background-color: green; border-radius: 0;"></div>'-->
+<!--    });-->
+<!--    var consumerIcon = L.divIcon({-->
+<!--        className: 'consumer-icon',-->
+<!--        html: '<div style="width: 20px; height: 20px; background-color: blue; border-radius: 50%;"></div>'-->
+<!--    });-->
+
+<!--    var enterpriseMarkers = [];-->
+<!--    var supplierMarkers = [];-->
+<!--    var consumerMarkers = [];-->
+
+<!--    function createMarker(entity, type) {-->
+<!--        if (!entity[2]) return;-->
+<!--        var lat = entity[2][1], lon = entity[2][0];-->
+<!--        var marker;-->
+
+<!--        if (type === "Поставщик") {-->
+<!--            marker = L.marker([lat, lon], { icon: supplierIcon }).addTo(map);-->
+<!--            supplierMarkers.push(marker);-->
+<!--        } else if (type === "Потребитель") {-->
+<!--            marker = L.marker([lon, lat], { icon: consumerIcon }).addTo(map);-->
+<!--            consumerMarkers.push(marker);-->
+<!--        } else {-->
+<!--            marker = L.marker([lon, lat], { draggable: true }).addTo(map);-->
+<!--            enterpriseMarkers.push(marker);-->
+
+<!--            // Enable dragging-->
+<!--            marker.on('dragend', function(e) {-->
+<!--                var latlng = e.target.getLatLng();-->
+<!--                updateMarkerLocation(entity[0], latlng.lat, latlng.lng);-->
+<!--                addRow(entity[0], entity[1], type, "Новый город", latlng, entity[3]);-->
+<!--            });-->
+<!--        }-->
+
+<!--        fetchLocationName(lat, lon, function(city) {-->
+<!--            marker.bindPopup(`<b>${entity[1]}</b><br>${city}`).openPopup();-->
+<!--            addRow(entity[0], entity[1], type, city, marker.getLatLng(), entity[3]);-->
+<!--        });-->
+
+<!--        return marker;-->
+<!--    }-->
+
+<!--    function addRow(id, name, type, locationName, latlng, cost) {-->
+<!--        var row = document.createElement('tr');-->
+<!--        row.setAttribute('id', `row-${id}`);-->
+<!--        row.innerHTML = `<td>${name}</td><td>${type}</td><td id="loc-${id}">${locationName}</td><td>${cost}</td>`;-->
+<!--        document.getElementById('route-tbody').appendChild(row);-->
+
+<!--        if (type === "Предприятие") {-->
+<!--            var button = document.createElement('button');-->
+<!--            button.textContent = "Выбрать";-->
+<!--            button.onclick = function() {-->
+<!--                saveNewLocation(id, latlng);-->
+<!--            };-->
+<!--            row.appendChild(button);-->
+<!--        }-->
+<!--    }-->
+
+<!--    function fetchLocationName(lat, lon, callback) {-->
+<!--        fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=10&addressdetails=1`)-->
+<!--        .then(response => response.json())-->
+<!--        .then(data => {-->
+<!--            let city = "Неизвестно";-->
+<!--            if (data.address) {-->
+<!--                city = data.address.city || data.address.town || data.address.village || "Неизвестно";-->
+<!--            }-->
+<!--            callback(city);-->
+<!--        })-->
+<!--        .catch(() => callback("Ошибка"));-->
+<!--    }-->
+
+<!--    function drawRoute(start, end, color) {-->
+<!--        var url = `https://router.project-osrm.org/route/v1/driving/${start[1]},${start[0]};${end[1]},${end[0]}?overview=full&geometries=geojson`;-->
+
+<!--        fetch(url)-->
+<!--        .then(response => response.json())-->
+<!--        .then(data => {-->
+<!--            if (data.routes && data.routes.length > 0) {-->
+<!--                var route = L.geoJSON(data.routes[0].geometry, {-->
+<!--                    style: { color: color, weight: 5 }-->
+<!--                }).addTo(map);-->
+<!--            }-->
+<!--        })-->
+<!--        .catch(error => console.error('Ошибка маршрута:', error));-->
+<!--    }-->
+
+<!--    function updateMarkerLocation(entityId, lat, lon) {-->
+<!--        fetch('/update_location', {-->
+<!--            method: 'POST',-->
+<!--            headers: { 'Content-Type': 'application/json' },-->
+<!--            body: JSON.stringify({ id: entityId, type: 'enterprise', lat: lat, lon: lon })-->
+<!--        })-->
+<!--        .then(response => response.json())-->
+<!--        .then(data => {-->
+<!--            console.log('Location updated:', data.message);-->
+<!--        })-->
+<!--        .catch(error => console.error('Error updating location:', error));-->
+<!--    }-->
+
+<!--    function saveNewLocation(id, latlng) {-->
+<!--        console.log('Saving new location for enterprise', id, latlng);-->
+<!--        updateMarkerLocation(id, latlng.lat, latlng.lng);-->
+<!--    }-->
+
+<!--    // Create markers for all entities-->
+<!--    var enterpriseMarkers = enterprises.map(e => createMarker(e, "Предприятие"));-->
+<!--    var supplierMarkers = timber_enterprises.map(t => createMarker(t, "Поставщик"));-->
+<!--    var consumerMarkers = consumers.map(c => createMarker(c, "Потребитель"));-->
+
+<!--    setTimeout(() => {-->
+<!--        enterpriseMarkers.forEach(ent => {-->
+<!--            if (!ent) return;-->
+<!--            var entLatLng = ent.getLatLng();-->
+
+<!--            supplierMarkers.forEach(sup => {-->
+<!--                if (!sup) return;-->
+<!--                drawRoute([entLatLng.lat, entLatLng.lng], [sup.getLatLng().lat, sup.getLatLng().lng], 'red');-->
+<!--            });-->
+
+<!--            consumerMarkers.forEach(con => {-->
+<!--                if (!con) return;-->
+<!--                drawRoute([entLatLng.lat, entLatLng.lng], [con.getLatLng().lat, con.getLatLng().lng], 'yellow');-->
+<!--            });-->
+<!--        });-->
+<!--    }, 2000);-->
+<!--</script>-->
+<!--</body>-->
+<!--</html>-->
+
+
+
+<!--<!DOCTYPE html>-->
+<!--<html lang="ru">-->
+<!--<head>-->
+<!--    <meta charset="UTF-8">-->
+<!--    <meta name="viewport" content="width=device-width, initial-scale=1.0">-->
+<!--    <title>Карта предприятий</title>-->
+<!--    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.8.0/dist/leaflet.css" />-->
+<!--    <script src="https://unpkg.com/leaflet@1.8.0/dist/leaflet.js"></script>-->
+
+<!--    <style>-->
+<!--        body {-->
+<!--            font-family: Arial, sans-serif;-->
+<!--            margin: 0;-->
+<!--            padding: 0;-->
+<!--            text-align: center;-->
+<!--            background-color: #f4f4f4;-->
+<!--        }-->
+<!--        h1 {-->
+<!--            margin-top: 10px;-->
+<!--        }-->
+<!--        #map {-->
+<!--            width: 100%;-->
+<!--            height: 60vh;-->
+<!--            max-width: 1200px;-->
+<!--            margin: auto;-->
+<!--            border-radius: 8px;-->
+<!--        }-->
+<!--        table {-->
+<!--            width: 95%;-->
+<!--            max-width: 1200px;-->
+<!--            margin: 15px auto;-->
+<!--            border-collapse: collapse;-->
+<!--            background: white;-->
+<!--            border-radius: 8px;-->
+<!--            overflow: hidden;-->
+<!--        }-->
+<!--        th, td {-->
+<!--            padding: 10px;-->
+<!--            border: 1px solid #ddd;-->
+<!--            text-align: center;-->
+<!--        }-->
+<!--        th {-->
+<!--            background-color: #007bff;-->
+<!--            color: white;-->
+<!--        }-->
+<!--        @media (max-width: 768px) {-->
+<!--            #map { height: 50vh; }-->
+<!--            th, td { font-size: 14px; }-->
+<!--        }-->
+<!--    </style>-->
+<!--</head>-->
+<!--<body>-->
+<!-- <header>-->
+<!--    <nav>-->
+<!--      <ul>-->
+<!--        <li><a href="/">Главная</a></li>-->
+<!--      </ul>-->
+<!--    </nav>-->
+<!--  </header>-->
+<!--<h1>Карта предприятий</h1>-->
+<!--<div id="map"></div>-->
+
+<!--<table id="route-table">-->
+<!--    <thead>-->
+<!--        <tr>-->
+<!--            <th>Название</th>-->
+<!--            <th>Тип</th>-->
+<!--            <th>Населённый пункт</th>-->
+<!--        </tr>-->
+<!--    </thead>-->
+<!--    <tbody id="route-tbody"></tbody>-->
+<!--</table>-->
+
+<!--<script>-->
+<!--    var map = L.map('map', { maxZoom: 18 }).setView([60, 40], 6);-->
+<!--    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {-->
+<!--        attribution: '&copy; OpenStreetMap contributors'-->
+<!--    }).addTo(map);-->
+
+<!--    var enterprises = {{ enterprises | tojson }};-->
+<!--    var timber_enterprises = {{ timber_enterprises | tojson }};-->
+<!--    var consumers = {{ consumers | tojson }};-->
+
+<!--    var supplierIcon = L.divIcon({-->
+<!--        className: 'supplier-icon',-->
+<!--        html: '<div style="width: 20px; height: 20px; background-color: green; border-radius: 0;"></div>'-->
+<!--    });-->
+<!--    var consumerIcon = L.divIcon({-->
+<!--        className: 'consumer-icon',-->
+<!--        html: '<div style="width: 20px; height: 20px; background-color: blue; border-radius: 50%;"></div>'-->
+<!--    });-->
+
+<!--    function createMarker(entity, type) {-->
+<!--        if (!entity[2]) return;-->
+<!--        var lat = entity[2][1], lon = entity[2][0];-->
+<!--        var marker;-->
+
+<!--        if (type === "Поставщик") {-->
+<!--            marker = L.marker([lat, lon], { icon: supplierIcon }).addTo(map);-->
+<!--        } else if (type === "Потребитель") {-->
+<!--            marker = L.marker([lon, lat], { icon: consumerIcon }).addTo(map);-->
+<!--        } else {-->
+<!--            marker = L.marker([lon, lat]).addTo(map);-->
+<!--        }-->
+
+<!--        fetchLocationName(lat, lon, function(city) {-->
+<!--            marker.bindPopup(`<b>${entity[1]}</b><br>${city}`).openPopup();-->
+<!--            addRow(entity[0], entity[1], type, city);-->
+<!--        });-->
+
+<!--        return marker;-->
+<!--    }-->
+
+<!--    function addRow(id, name, type, locationName) {-->
+<!--        var row = document.createElement('tr');-->
+<!--        row.setAttribute('id', `row-${id}`);-->
+<!--        row.innerHTML = `<td>${name}</td><td>${type}</td><td id="loc-${id}">${locationName}</td>`;-->
+<!--        document.getElementById('route-tbody').appendChild(row);-->
+<!--    }-->
+
+<!--    function fetchLocationName(lat, lon, callback) {-->
+<!--        fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=10&addressdetails=1`)-->
+<!--        .then(response => response.json())-->
+<!--        .then(data => {-->
+<!--            let city = "Неизвестно";-->
+<!--            if (data.address) {-->
+<!--                city = data.address.city || data.address.town || data.address.village || "Неизвестно";-->
+<!--            }-->
+<!--            callback(city);-->
+<!--        })-->
+<!--        .catch(() => callback("Ошибка"));-->
+<!--    }-->
+
+<!--    function drawRoute(start, end, color) {-->
+<!--        var url = `https://router.project-osrm.org/route/v1/driving/${start[1]},${start[0]};${end[1]},${end[0]}?overview=full&geometries=geojson`;-->
+
+<!--        fetch(url)-->
+<!--        .then(response => response.json())-->
+<!--        .then(data => {-->
+<!--            var route = L.geoJSON(data.routes[0].geometry, {-->
+<!--                style: { color: color, weight: 5 }-->
+<!--            }).addTo(map);-->
+<!--        })-->
+<!--        .catch(error => console.error('Ошибка маршрута:', error));-->
+<!--    }-->
+
+<!--    var enterpriseMarkers = enterprises.map(e => createMarker(e, "Предприятие"));-->
+<!--    var supplierMarkers = timber_enterprises.map(t => createMarker(t, "Поставщик"));-->
+<!--    var consumerMarkers = consumers.map(c => createMarker(c, "Потребитель"));-->
+
+<!--    setTimeout(() => {-->
+<!--        enterpriseMarkers.forEach(ent => {-->
+<!--            if (!ent) return;-->
+<!--            var entLatLng = ent.getLatLng();-->
+
+<!--            supplierMarkers.forEach(sup => {-->
+<!--                if (!sup) return;-->
+<!--                drawRoute([entLatLng.lat, entLatLng.lng], [sup.getLatLng().lat, sup.getLatLng().lng], 'red');-->
+<!--            });-->
+
+<!--            consumerMarkers.forEach(con => {-->
+<!--                if (!con) return;-->
+<!--                drawRoute([entLatLng.lat, entLatLng.lng], [con.getLatLng().lat, con.getLatLng().lng], 'yellow');-->
+<!--            });-->
+<!--        });-->
+<!--    }, 2000);-->
+<!--</script>-->
+<!--</body>-->
+<!--</html>-->
+
+<!--<!DOCTYPE html>-->
+<!--<html lang="ru">-->
+<!--<head>-->
+<!--    <meta charset="UTF-8">-->
+<!--    <meta name="viewport" content="width=device-width, initial-scale=1.0">-->
+<!--    <title>Карта предприятий</title>-->
+<!--    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.8.0/dist/leaflet.css" />-->
+<!--    <script src="https://unpkg.com/leaflet@1.8.0/dist/leaflet.js"></script>-->
+
+<!--    <style>-->
+<!--        body {-->
+<!--            font-family: Arial, sans-serif;-->
+<!--            margin: 0;-->
+<!--            padding: 0;-->
+<!--            text-align: center;-->
+<!--            background-color: #f4f4f4;-->
+<!--        }-->
+<!--        h1 {-->
+<!--            margin-top: 10px;-->
+<!--        }-->
+<!--        #map {-->
+<!--            width: 100%;-->
+<!--            height: 60vh;-->
+<!--            max-width: 1200px;-->
+<!--            margin: auto;-->
+<!--            border-radius: 8px;-->
+<!--        }-->
+<!--        table {-->
+<!--            width: 95%;-->
+<!--            max-width: 1200px;-->
+<!--            margin: 15px auto;-->
+<!--            border-collapse: collapse;-->
+<!--            background: white;-->
+<!--            border-radius: 8px;-->
+<!--            overflow: hidden;-->
+<!--        }-->
+<!--        th, td {-->
+<!--            padding: 10px;-->
+<!--            border: 1px solid #ddd;-->
+<!--            text-align: center;-->
+<!--        }-->
+<!--        th {-->
+<!--            background-color: #007bff;-->
+<!--            color: white;-->
+<!--        }-->
+<!--        @media (max-width: 768px) {-->
+<!--            #map { height: 50vh; }-->
+<!--            th, td { font-size: 14px; }-->
+<!--        }-->
+<!--    </style>-->
+<!--</head>-->
+<!--<body>-->
+
+<!--<h1>Карта предприятий</h1>-->
+<!--<div id="map"></div>-->
+
+<!--<table id="route-table">-->
+<!--    <thead>-->
+<!--        <tr>-->
+<!--            <th>Название</th>-->
+<!--            <th>Тип</th>-->
+<!--            <th>Населённый пункт</th>-->
+<!--        </tr>-->
+<!--    </thead>-->
+<!--    <tbody id="route-tbody"></tbody>-->
+<!--</table>-->
+
+<!--<script>-->
+<!--    var map = L.map('map', { maxZoom: 18 }).setView([60, 40], 6);-->
+<!--    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {-->
+<!--        attribution: '&copy; OpenStreetMap contributors'-->
+<!--    }).addTo(map);-->
+
+<!--    var enterprises = {{ enterprises | tojson }};-->
+<!--    var timber_enterprises = {{ timber_enterprises | tojson }};-->
+<!--    var consumers = {{ consumers | tojson }};-->
+
+<!--    var supplierIcon = L.divIcon({-->
+<!--        className: 'supplier-icon',-->
+<!--        html: '<div style="width: 20px; height: 20px; background-color: green; border-radius: 0;"></div>'-->
+<!--    });-->
+<!--    var consumerIcon = L.divIcon({-->
+<!--        className: 'consumer-icon',-->
+<!--        html: '<div style="width: 20px; height: 20px; background-color: blue; border-radius: 50%;"></div>'-->
+<!--    });-->
+
+<!--    function createMarker(entity, type) {-->
+<!--        if (!entity[2]) return;-->
+<!--        var lat = entity[2][1], lon = entity[2][0];-->
+<!--        var marker;-->
+
+<!--        if (type === "Поставщик") {-->
+<!--            marker = L.marker([lat, lon], { icon: supplierIcon, draggable: true }).addTo(map);-->
+<!--        } else if (type === "Потребитель") {-->
+<!--            marker = L.marker([lon, lat], { icon: consumerIcon, draggable: true }).addTo(map);-->
+<!--        } else {-->
+<!--            marker = L.marker([lon, lat], { draggable: true }).addTo(map);-->
+<!--        }-->
+
+<!--        marker.bindPopup(`<b>${entity[1]}</b><br>(${type})`).openPopup();-->
+
+<!--        fetchLocationName(lat, lon, function(city) {-->
+<!--            marker.bindPopup(`<b>${entity[1]}</b><br>${city}`).openPopup();-->
+<!--            addRow(entity[0], entity[1], type, city);-->
+<!--        });-->
+
+<!--        marker.on('dragend', function (e) {-->
+<!--            var newLatLng = e.target.getLatLng();-->
+<!--            fetch('/update_location', {-->
+<!--                method: 'POST',-->
+<!--                headers: { 'Content-Type': 'application/json' },-->
+<!--                body: JSON.stringify({-->
+<!--                    id: entity[0],-->
+<!--                    type: type,-->
+<!--                    lat: newLatLng.lat,-->
+<!--                    lon: newLatLng.lng-->
+<!--                })-->
+<!--            })-->
+<!--            .then(() => fetchLocationName(newLatLng.lat, newLatLng.lng, function(city) {-->
+<!--                marker.bindPopup(`<b>${entity[1]}</b><br>${city}`).openPopup();-->
+<!--                updateRow(entity[0], city);-->
+<!--            }));-->
+<!--        });-->
+<!--    }-->
+
+<!--    enterprises.forEach(e => createMarker(e, "Предприятие"));-->
+<!--    timber_enterprises.forEach(t => createMarker(t, "Поставщик"));-->
+<!--    consumers.forEach(c => createMarker(c, "Потребитель"));-->
+
+<!--    function addRow(id, name, type, locationName) {-->
+<!--        var row = document.createElement('tr');-->
+<!--        row.setAttribute('id', `row-${id}`);-->
+<!--        row.innerHTML = `<td>${name}</td><td>${type}</td><td id="loc-${id}">${locationName}</td>`;-->
+<!--        document.getElementById('route-tbody').appendChild(row);-->
+<!--    }-->
+
+<!--    function updateRow(id, newLocation) {-->
+<!--        var cell = document.getElementById(`loc-${id}`);-->
+<!--        if (cell) cell.textContent = newLocation;-->
+<!--    }-->
+
+<!--    function fetchLocationName(lat, lon, callback) {-->
+<!--        fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=10&addressdetails=1`)-->
+<!--        .then(response => response.json())-->
+<!--        .then(data => {-->
+<!--            let city = "Неизвестно";-->
+<!--            if (data.address) {-->
+<!--                city = data.address.city || data.address.town || data.address.village || "Неизвестно";-->
+<!--            }-->
+<!--            callback(city);-->
+<!--        })-->
+<!--        .catch(() => callback("Ошибка"));-->
+<!--    }-->
+<!--</script>-->
+
+<!--</body>-->
+<!--</html>-->
+
+
+<!--<!DOCTYPE html>-->
+<!--<html lang="ru">-->
+<!--<head>-->
+<!--    <meta charset="UTF-8">-->
+<!--    <meta name="viewport" content="width=device-width, initial-scale=1.0">-->
+<!--    <title>Карта предприятий</title>-->
+<!--    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.8.0/dist/leaflet.css" />-->
+<!--    <script src="https://unpkg.com/leaflet@1.8.0/dist/leaflet.js"></script>-->
+<!--    <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>-->
+<!--</head>-->
+<!--<body>-->
+
+<!--<h1>Карта предприятий</h1>-->
+<!--<div id="map" style="width: 100%; height: 600px;"></div>-->
+
+<!--<table id="route-table">-->
+<!--    <thead>-->
+<!--        <tr>-->
+<!--            <th>Название</th>-->
+<!--            <th>Тип</th>-->
+<!--            <th>Населённый пункт</th>-->
+<!--        </tr>-->
+<!--    </thead>-->
+<!--    <tbody id="route-tbody"></tbody>-->
+<!--</table>-->
+
+<!--<script>-->
+<!--    var map = L.map('map', { maxZoom: 18 }).setView([60, 40], 6);-->
+<!--    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {-->
+<!--        attribution: '&copy; OpenStreetMap contributors'-->
+<!--    }).addTo(map);-->
+
+<!--    var enterprises = {{ enterprises | tojson }};-->
+<!--    var timber_enterprises = {{ timber_enterprises | tojson }};-->
+<!--    var consumers = {{ consumers | tojson }};-->
+
+<!--    var supplierIcon = L.divIcon({-->
+<!--        className: 'supplier-icon',-->
+<!--        html: '<div style="width: 20px; height: 20px; background-color: green; border-radius: 0;"></div>'-->
+<!--    });-->
+<!--    var consumerIcon = L.divIcon({-->
+<!--        className: 'consumer-icon',-->
+<!--        html: '<div style="width: 20px; height: 20px; background-color: blue; border-radius: 50%;"></div>'-->
+<!--    });-->
+
+<!--    function createMarker(entity, type) {-->
+<!--        if (!entity[2]) return;-->
+<!--        var lat = entity[2][1], lon = entity[2][0];-->
+<!--        var marker;-->
+
+<!--        if (type === "Поставщик") {-->
+<!--            marker = L.marker([lat, lon], { icon: supplierIcon, draggable: true }).addTo(map);-->
+<!--        } else if (type === "Потребитель") {-->
+<!--            marker = L.marker([lon, lat], { icon: consumerIcon, draggable: true }).addTo(map);-->
+<!--        } else {-->
+<!--            marker = L.marker([lon, lat], { draggable: true }).addTo(map);-->
+<!--        }-->
+
+<!--        marker.bindPopup(`<b>${entity[1]}</b><br>(${type})`).openPopup();-->
+
+<!--        fetchLocationName(lat, lon, function(city) {-->
+<!--            marker.bindPopup(`<b>${entity[1]}</b><br>${city}`).openPopup();-->
+<!--            addRow(entity[0], entity[1], type, city);-->
+<!--        });-->
+
+<!--        marker.on('dragend', function (e) {-->
+<!--            var newLatLng = e.target.getLatLng();-->
+<!--            fetch('/update_location', {-->
+<!--                method: 'POST',-->
+<!--                headers: { 'Content-Type': 'application/json' },-->
+<!--                body: JSON.stringify({-->
+<!--                    id: entity[0],-->
+<!--                    type: type,-->
+<!--                    lat: newLatLng.lat,-->
+<!--                    lon: newLatLng.lng-->
+<!--                })-->
+<!--            })-->
+<!--            .then(() => fetchLocationName(newLatLng.lat, newLatLng.lng, function(city) {-->
+<!--                marker.bindPopup(`<b>${entity[1]}</b><br>${city}`).openPopup();-->
+<!--                updateRow(entity[0], city);-->
+<!--            }));-->
+<!--        });-->
+<!--    }-->
+
+<!--    enterprises.forEach(e => createMarker(e, "Предприятие"));-->
+<!--    timber_enterprises.forEach(t => createMarker(t, "Поставщик"));-->
+<!--    consumers.forEach(c => createMarker(c, "Потребитель"));-->
+
+<!--    function drawRoutes() {-->
+<!--        timber_enterprises.forEach(timber => {-->
+<!--            enterprises.forEach(enterprise => {-->
+<!--                drawCarRoute(timber[2], enterprise[2], 'yellow');-->
+<!--            });-->
+<!--        });-->
+<!--        enterprises.forEach(enterprise => {-->
+<!--            consumers.forEach(consumer => {-->
+<!--                drawCarRoute(enterprise[2], consumer[2], 'red');-->
+<!--            });-->
+<!--        });-->
+<!--    }-->
+
+<!--    function drawCarRoute(start, end, color) {-->
+<!--        if (!start || !end) return;-->
+<!--        L.Routing.control({-->
+<!--            waypoints: [-->
+<!--                L.latLng(start[1], start[0]),-->
+<!--                L.latLng(end[1], end[0])-->
+<!--            ],-->
+<!--            routeWhileDragging: true,-->
+<!--            router: L.Routing.osrmv1({-->
+<!--                serviceUrl: 'https://router.project-osrm.org/route/v1'-->
+<!--            }),-->
+<!--            lineOptions: {-->
+<!--                styles: [{ color: color, weight: 4 }]-->
+<!--            },-->
+<!--            createMarker: function() { return null; }-->
+<!--        }).addTo(map);-->
+<!--    }-->
+<!--    drawRoutes();-->
+
+<!--    function addRow(id, name, type, locationName) {-->
+<!--        var row = document.createElement('tr');-->
+<!--        row.setAttribute('id', `row-${id}`);-->
+<!--        row.innerHTML = `<td>${name}</td><td>${type}</td><td id="loc-${id}">${locationName}</td>`;-->
+<!--        document.getElementById('route-tbody').appendChild(row);-->
+<!--    }-->
+
+<!--    function updateRow(id, newLocation) {-->
+<!--        var cell = document.getElementById(`loc-${id}`);-->
+<!--        if (cell) cell.textContent = newLocation;-->
+<!--    }-->
+
+<!--    function fetchLocationName(lat, lon, callback) {-->
+<!--        fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=10&addressdetails=1`)-->
+<!--        .then(response => response.json())-->
+<!--        .then(data => {-->
+<!--            let city = "Неизвестно";-->
+<!--            if (data.address) {-->
+<!--                city = data.address.city || data.address.town || data.address.village || "Неизвестно";-->
+<!--            }-->
+<!--            callback(city);-->
+<!--        })-->
+<!--        .catch(() => callback("Ошибка"));-->
+<!--    }-->
+<!--</script>-->
+<!--</body>-->
+<!--</html>-->
+
+
+
+
+
+<!--<!DOCTYPE html>-->
+<!--<html lang="ru">-->
+<!--<head>-->
+<!--    <meta charset="UTF-8">-->
+<!--    <meta name="viewport" content="width=device-width, initial-scale=1.0">-->
+<!--    <title>Карта предприятий</title>-->
+<!--    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.8.0/dist/leaflet.css" />-->
+<!--    <style>-->
+<!--        #map { width: 100%; height: 600px; }-->
+<!--        body {-->
+<!--            font-family: Arial, sans-serif;-->
+<!--            margin: 0;-->
+<!--            padding: 0;-->
+<!--            background-color: #f0f5f3;-->
+<!--            color: #2c5b4b;-->
+<!--        }-->
+<!--        header {-->
+<!--            background-color: #6dbd9e;-->
+<!--            color: white;-->
+<!--            padding: 20px;-->
+<!--            text-align: center;-->
+<!--        }-->
+<!--        main {-->
+<!--            padding: 20px;-->
+<!--        }-->
+<!--        .route-info {-->
+<!--            background-color: #f1f1f1;-->
+<!--            padding: 10px;-->
+<!--            margin-bottom: 10px;-->
+<!--        }-->
+<!--        #route-table {-->
+<!--            margin-top: 20px;-->
+<!--            width: 100%;-->
+<!--            border-collapse: collapse;-->
+<!--        }-->
+<!--        #route-table th, #route-table td {-->
+<!--            border: 1px solid #ddd;-->
+<!--            padding: 8px;-->
+<!--        }-->
+<!--    </style>-->
+<!--</head>-->
+<!--<body>-->
+
+<!--<header>-->
+<!--    <h1>Карта предприятий</h1>-->
+<!--</header>-->
+
+<!--<main>-->
+<!--    <div id="map"></div>-->
+<!--    <div id="route-info-container"></div>-->
+<!--    <table id="route-table">-->
+<!--        <thead>-->
+<!--            <tr>-->
+<!--                <th>Предприятие</th>-->
+<!--                <th>Лесозаготовитель</th>-->
+<!--                <th>Потребитель</th>-->
+<!--                <th>Расстояние (км)</th>-->
+<!--                <th>Время в пути (ч)</th>-->
+<!--                <th>Вместимость (тонн)</th>-->
+<!--            </tr>-->
+<!--        </thead>-->
+<!--        <tbody id="route-tbody"></tbody>-->
+<!--    </table>-->
+<!--</main>-->
+
+<!--<footer>-->
+<!--    <p>&copy; 2024 Система управления предприятием. Все права защищены.</p>-->
+<!--</footer>-->
+
+<!--<script src="https://unpkg.com/leaflet@1.8.0/dist/leaflet.js"></script>-->
+<!--<script>-->
+<!--    var map = L.map('map').setView([62.5, 34.5], 8);-->
+
+<!--    // Добавление слоя OpenStreetMap-->
+<!--    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {-->
+<!--        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'-->
+<!--    }).addTo(map);-->
+
+<!--    var markers = L.featureGroup().addTo(map);-->
+<!--    var routingControl;-->
+<!--    var enterprises = {{ enterprises | tojson }};-->
+<!--    var timber_enterprises = {{ timber_enterprises | tojson }};-->
+<!--    var consumers = {{ consumers | tojson }};-->
+
+<!--    // Добавляем маркеры для предприятий-->
+<!--    enterprises.forEach(function(enterprise) {-->
+<!--        var latLng = enterprise[2].split(',').map(Number); // Разделяем строку координат на массив-->
+<!--        var marker = L.marker(latLng).addTo(map);-->
+<!--        marker.bindPopup('Предприятие: ' + enterprise[1]);-->
+<!--        markers.addLayer(marker);-->
+<!--    });-->
+
+<!--    // Добавляем маркеры для лесозаготовителей-->
+<!--    timber_enterprises.forEach(function(timber) {-->
+<!--        var latLng = timber[2].split(',').map(Number);-->
+<!--        var marker = L.marker(latLng).addTo(map);-->
+<!--        marker.bindPopup('Лесозаготовитель: ' + timber[1]);-->
+<!--        markers.addLayer(marker);-->
+<!--    });-->
+
+<!--    // Добавляем маркеры для потребителей-->
+<!--    consumers.forEach(function(consumer) {-->
+<!--        var latLng = consumer[2].split(',').map(Number);-->
+<!--        var marker = L.marker(latLng).addTo(map);-->
+<!--        marker.bindPopup('Потребитель: ' + consumer[1]);-->
+<!--        markers.addLayer(marker);-->
+<!--    });-->
+
+<!--    // Функция для расчета маршрута-->
+<!--    function calculateRoute() {-->
+<!--        var markerCoords = markers.getLayers().map(function(marker) {-->
+<!--            return marker.getLatLng();-->
+<!--        });-->
+
+<!--        // Очистка предыдущего маршрута-->
+<!--        if (routingControl) {-->
+<!--            map.removeControl(routingControl);-->
+<!--        }-->
+
+<!--        // Строим новый маршрут-->
+<!--        routingControl = L.Routing.control({-->
+<!--            waypoints: markerCoords,-->
+<!--            routeWhileDragging: true-->
+<!--        }).addTo(map);-->
+
+<!--        // Когда маршрут найден, обновляем информацию в таблице-->
+<!--        routingControl.on('routesfound', function(e) {-->
+<!--            var route = e.routes[0];-->
+<!--            var distance = (route.summary.totalDistance / 1000).toFixed(2); // Расстояние в км-->
+<!--            var travelTime = (route.summary.totalTime / 3600).toFixed(2); // Время в пути в часах-->
+<!--            var capacity = (distance * 10).toFixed(2); // Примерный расчет вместимости, умножив на 10-->
+
+<!--            // Обновление таблицы-->
+<!--            var tableBody = document.getElementById('route-tbody');-->
+<!--            var row = document.createElement('tr');-->
+<!--            row.innerHTML = `-->
+<!--                <td>Предприятие 1</td>-->
+<!--                <td>Лесозаготовитель 1</td>-->
+<!--                <td>Потребитель 1</td>-->
+<!--                <td>${distance} км</td>-->
+<!--                <td>${travelTime} ч</td>-->
+<!--                <td>${capacity} тонн</td>-->
+<!--            `;-->
+<!--            tableBody.appendChild(row);-->
+
+<!--            // Сохраняем маршрут-->
+<!--            fetch('/save_route', {-->
+<!--                method: 'POST',-->
+<!--                headers: {-->
+<!--                    'Content-Type': 'application/json'-->
+<!--                },-->
+<!--                body: JSON.stringify({-->
+<!--                    distance: distance,-->
+<!--                    travel_time: travelTime,-->
+<!--                    capacity: capacity-->
+<!--                })-->
+<!--            })-->
+<!--            .then(response => response.json())-->
+<!--            .then(data => {-->
+<!--                console.log('Маршрут сохранен:', data);-->
+<!--            })-->
+<!--            .catch(error => console.error('Ошибка при сохранении маршрута:', error));-->
+<!--        });-->
+<!--    }-->
+
+<!--    // Обработчик клика для расчета маршрута-->
+<!--    map.on('click', function() {-->
+<!--        calculateRoute();-->
+<!--    });-->
+
+<!--</script>-->
+<!--</body>-->
+<!--</html>-->
+
+
+<!--<!DOCTYPE html>-->
+<!--<html>-->
+<!--<head>-->
+<!--  <title>Карта предприятий</title>-->
+<!--  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.8.0/dist/leaflet.css" />-->
+<!--  <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />-->
+<!--  <style>-->
+<!--    #map {-->
+<!--      width: 100%;-->
+<!--      height: 600px;-->
+<!--    }-->
+<!--    body {-->
+<!--      font-family: Arial, sans-serif;-->
+<!--      margin: 0;-->
+<!--      padding: 0;-->
+<!--      background-color: #f0f5f3;-->
+<!--      color: #2c5b4b;-->
+<!--    }-->
+<!--    header {-->
+<!--      background-color: #6dbd9e;-->
+<!--      color: white;-->
+<!--      padding: 20px;-->
+<!--      text-align: center;-->
+<!--    }-->
+<!--    nav ul {-->
+<!--      list-style-type: none;-->
+<!--      margin: 0;-->
+<!--      padding: 0;-->
+<!--      display: flex;-->
+<!--      justify-content: center;-->
+<!--    }-->
+<!--    nav li {-->
+<!--      margin: 0 10px;-->
+<!--    }-->
+<!--    nav a {-->
+<!--      color: white;-->
+<!--      text-decoration: none;-->
+<!--    }-->
+<!--    main {-->
+<!--      padding: 20px;-->
+<!--    }-->
+<!--    #route-info-container {-->
+<!--      margin-top: 20px;-->
+<!--    }-->
+<!--    .route-info {-->
+<!--      background-color: #f1f1f1;-->
+<!--      padding: 10px;-->
+<!--      margin-bottom: 10px;-->
+<!--    }-->
+<!--    .saved-route-info {-->
+<!--      background-color: #e5f2ed;-->
+<!--      padding: 10px;-->
+<!--      margin-bottom: 10px;-->
+<!--    }-->
+<!--  </style>-->
+<!--</head>-->
+<!--<body>-->
+<!--  <header>-->
+<!--    <nav>-->
+<!--      <ul>-->
+<!--        <li><a href="/">Главная</a></li>-->
+<!--      </ul>-->
+<!--    </nav>-->
+<!--  </header>-->
+
+<!--  <main>-->
+<!--    <h1>Карта предприятий</h1>-->
+<!--    <div id="map"></div>-->
+<!--    <div id="route-info-container"></div>-->
+<!--    <div id="saved-routes-container"></div>-->
+<!--  </main>-->
+
+<!--  <footer>-->
+<!--    <p>&copy; 2024 Система управления предприятием. Все права защищены.</p>-->
+<!--  </footer>-->
+
+<!--  <script src="https://unpkg.com/leaflet@1.8.0/dist/leaflet.js"></script>-->
+<!--  <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>-->
+<!--  <script>-->
+<!--    // Инициализация карты-->
+<!--    var map = L.map('map').setView([62.5, 34.5], 8);-->
+
+<!--    // Добавление слоя OpenStreetMap-->
+<!--    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {-->
+<!--      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'-->
+<!--    }).addTo(map);-->
+
+<!--    // Группа для маркеров-->
+<!--    var markers = L.featureGroup().addTo(map);-->
+
+<!--    // Переменная для хранения объекта маршрута-->
+<!--    var routingControl;-->
+
+<!--    // Обработчик клика на карте для установки маркеров-->
+<!--    map.on('click', function(e) {-->
+<!--      var marker = L.marker(e.latlng).addTo(markers);-->
+<!--      marker.bindPopup('Координаты: ' + e.latlng.lat.toFixed(5) + ', ' + e.latlng.lng.toFixed(5));-->
+
+<!--      updateRoute();-->
+<!--    });-->
+
+<!--    // Функция для обновления маршрута-->
+<!--    function updateRoute() {-->
+<!--      // Получение массива координат маркеров-->
+<!--      var markerCoords = markers.getLayers().map(function(marker) {-->
+<!--        return marker.getLatLng();-->
+<!--      });-->
+
+<!--      // Очистка предыдущего маршрута-->
+<!--      if (routingControl) {-->
+<!--        map.removeControl(routingControl);-->
+<!--      }-->
+
+<!--      // Построение нового маршрута с помощью Leaflet Routing Machine-->
+<!--      routingControl = L.Routing.control({-->
+<!--        waypoints: markerCoords,-->
+<!--        routeWhileDragging: true,-->
+<!--        showAlternatives: true,-->
+<!--        altLineOptions: {-->
+<!--          styles: [-->
+<!--            { color: 'blue', weight: 4 },-->
+<!--            { color: 'green', weight: 4 },-->
+<!--            { color: 'orange', weight: 4 }-->
+<!--          ]-->
+<!--        },-->
+<!--        createMarker: function(i, wp, n) {-->
+<!--          return L.marker(wp.latLng, {-->
+<!--            draggable: true,-->
+<!--            icon: L.divIcon({ className: 'leaflet-marker-icon' })-->
+<!--          });-->
+<!--        },-->
+<!--        routeWhileDragging: true,-->
+<!--        show: false,-->
+<!--        collapsible: true,-->
+<!--        autoRoute: true,-->
+
+<!--        itineraryControl: {-->
+<!--          showSubHeading: true,-->
+<!--          show: true-->
+<!--        }-->
+<!--      }).addTo(map);-->
+<!--      // Функция для удаления маркера-->
+<!--      markers.on('click', function (e) {-->
+<!--          if (e.layer) {-->
+<!--              markers.removeLayer(e.layer);-->
+<!--              updateRoute();-->
+<!--          }-->
+<!--      });-->
+<!--      routingControl.on('routesfound', function(e) {-->
+<!--        var routes = e.routes;-->
+<!--        var summary = routes[0].summary;-->
+<!--        var distance = (summary.totalDistance / 1000).toFixed(2); // Расстояние в километрах-->
+<!--        var condition = 'Хорошее'; // Состояние дороги (можно добавить логику для определения состояния)-->
+
+<!--        // Отобразить информацию о маршруте под картой-->
+<!--        const routeInfoContainer = document.getElementById('route-info-container');-->
+<!--        const routeInfo = document.createElement('div');-->
+<!--        routeInfo.classList.add('route-info');-->
+<!--        routeInfo.innerHTML = `-->
+<!--          <h3>Маршрут</h3>-->
+<!--          <p>Расстояние: ${distance} км</p>-->
+<!--          <p>Состояние дороги: ${condition}</p>-->
+<!--          <button class="save-route-btn" data-distance="${distance}">Сохранить</button>-->
+<!--        `;-->
+<!--        routeInfoContainer.appendChild(routeInfo);-->
+
+<!--        // Обработчик клика на кнопку "Сохранить"-->
+<!--        const saveRouteBtn = routeInfo.querySelector('.save-route-btn');-->
+<!--        saveRouteBtn.addEventListener('click', function() {-->
+<!--          const selectedDistance = this.dataset.distance;-->
+<!--          saveRoute(selectedDistance);-->
+<!--        });-->
+<!--      });-->
+<!--    }-->
+
+<!--    // Функция для сохранения маршрута-->
+<!--    function saveRoute(distance) {-->
+<!--      // Отправка данных маршрута на сервер-->
+<!--      fetch('/save_route', {-->
+<!--        method: 'POST',-->
+<!--        headers: {-->
+<!--          'Content-Type': 'application/json'-->
+<!--        },-->
+<!--        body: JSON.stringify({ distance: distance })-->
+<!--      })-->
+<!--      .then(response => response.json())-->
+<!--      .then(data => {-->
+<!--        console.log('Saved route:', data);-->
+
+<!--        // Отобразить сохраненные данные-->
+<!--        const savedRouteContainer = document.getElementById('saved-routes-container');-->
+<!--        const savedRouteInfo = document.createElement('div');-->
+<!--        savedRouteInfo.classList.add('saved-route-info');-->
+<!--        savedRouteInfo.innerHTML = `-->
+<!--          <h3>Сохраненный маршрут</h3>-->
+<!--          <p>Расстояние: ${data.distance} км</p>-->
+<!--          <p>Время в пути: ${data.travel_time}</p>-->
+<!--          <p>Вместимость: ${data.capacity} тонн</p>-->
+<!--        `;-->
+<!--        savedRouteContainer.appendChild(savedRouteInfo);-->
+<!--      })-->
+<!--      .catch(error => {-->
+<!--        console.error('Error saving route:', error);-->
+<!--      });-->
+<!--    }-->
+<!--  </script>-->
+<!--</body>-->
+<!--</html>-->
+
+

@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html>
+<head>
+    
+    <meta http-equiv="content-type" content="text/html; charset=UTF-8" />
+    
+        <script>
+            L_NO_TOUCH = false;
+            L_DISABLE_3D = false;
+        </script>
+    
+    <style>html, body {width: 100%;height: 100%;margin: 0;padding: 0;}</style>
+    <style>#map {position:absolute;top:0;bottom:0;right:0;left:0;}</style>
+    <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.js"></script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Leaflet.awesome-markers/2.0.2/leaflet.awesome-markers.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.css"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.2/dist/css/bootstrap.min.css"/>
+    <link rel="stylesheet" href="https://netdna.bootstrapcdn.com/bootstrap/3.0.0/css/bootstrap-glyphicons.css"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.2.0/css/all.min.css"/>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/Leaflet.awesome-markers/2.0.2/leaflet.awesome-markers.css"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/python-visualization/folium/folium/templates/leaflet.awesome.rotate.min.css"/>
+    
+            <meta name="viewport" content="width=device-width,
+                initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+            <style>
+                #map_6315e0880c1c932a9fb9b105894d9b95 {
+                    position: relative;
+                    width: 100.0%;
+                    height: 100.0%;
+                    left: 0.0%;
+                    top: 0.0%;
+                }
+                .leaflet-container { font-size: 1rem; }
+            </style>
+        
+</head>
+<body>
+    
+    
+            <div class="folium-map" id="map_6315e0880c1c932a9fb9b105894d9b95" ></div>
+        
+</body>
+<script>
+    
+    
+            var map_6315e0880c1c932a9fb9b105894d9b95 = L.map(
+                "map_6315e0880c1c932a9fb9b105894d9b95",
+                {
+                    center: [62.5833, 30.1667],
+                    crs: L.CRS.EPSG3857,
+                    zoom: 8,
+                    zoomControl: true,
+                    preferCanvas: false,
+                }
+            );
+
+            
+
+        
+    
+            var tile_layer_ed8662d958ec7d810db3703a69d416a1 = L.tileLayer(
+                "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+                {"attribution": "\u0026copy; \u003ca href=\"https://www.openstreetmap.org/copyright\"\u003eOpenStreetMap\u003c/a\u003e contributors", "detectRetina": false, "maxNativeZoom": 19, "maxZoom": 19, "minZoom": 0, "noWrap": false, "opacity": 1, "subdomains": "abc", "tms": false}
+            );
+        
+    
+            tile_layer_ed8662d958ec7d810db3703a69d416a1.addTo(map_6315e0880c1c932a9fb9b105894d9b95);
+        
+    
+            var marker_2f3958993105754c0210dde51bf5982e = L.marker(
+                [62.0905, 30.969],
+                {}
+            ).addTo(map_6315e0880c1c932a9fb9b105894d9b95);
+        
+    
+        var popup_9aa47e1c8f7b7f46ba877eb3725da7cd = L.popup({"maxWidth": "100%"});
+
+        
+            
+                var html_79009530ef553a3a29a07b47e81571c7 = $(`<div id="html_79009530ef553a3a29a07b47e81571c7" style="width: 100.0%; height: 100.0%;"><b>Суояврский лесозавод</b><br>Производственный объем: 50000.00<br>Количество работников: 120</div>`)[0];
+                popup_9aa47e1c8f7b7f46ba877eb3725da7cd.setContent(html_79009530ef553a3a29a07b47e81571c7);
+            
+        
+
+        marker_2f3958993105754c0210dde51bf5982e.bindPopup(popup_9aa47e1c8f7b7f46ba877eb3725da7cd)
+        ;
+
+        
+    
+    
+            var marker_38f36091e1e7b673e5e0d562ed7dda92 = L.marker(
+                [33.182923, 61.841706],
+                {}
+            ).addTo(map_6315e0880c1c932a9fb9b105894d9b95);
+        
+    
+        var popup_32d35f87ef38f337de3508e2df9e3e1b = L.popup({"maxWidth": "100%"});
+
+        
+            
+                var html_d6ba03a87bc4145b760769a232aa77f6 = $(`<div id="html_d6ba03a87bc4145b760769a232aa77f6" style="width: 100.0%; height: 100.0%;"><b>Электростанция Эссойла</b><br>Производственный объем: 5.16<br>Количество работников: 4</div>`)[0];
+                popup_32d35f87ef38f337de3508e2df9e3e1b.setContent(html_d6ba03a87bc4145b760769a232aa77f6);
+            
+        
+
+        marker_38f36091e1e7b673e5e0d562ed7dda92.bindPopup(popup_32d35f87ef38f337de3508e2df9e3e1b)
+        ;
+
+        
+    
+    
+            var marker_bd3045946da65cbca521d542d612e6d7 = L.marker(
+                [33.608475, 61.702253],
+                {}
+            ).addTo(map_6315e0880c1c932a9fb9b105894d9b95);
+        
+    
+        var popup_afe61090fcac7f3240e0419baaee3ae7 = L.popup({"maxWidth": "100%"});
+
+        
+            
+                var html_14bdf2e475dfa123d42dcc510b80b358 = $(`<div id="html_14bdf2e475dfa123d42dcc510b80b358" style="width: 100.0%; height: 100.0%;"><b>Гофрошпон</b><br>Производственный объем: 140000<br>Количество работников: 20</div>`)[0];
+                popup_afe61090fcac7f3240e0419baaee3ae7.setContent(html_14bdf2e475dfa123d42dcc510b80b358);
+            
+        
+
+        marker_bd3045946da65cbca521d542d612e6d7.bindPopup(popup_afe61090fcac7f3240e0419baaee3ae7)
+        ;
+
+        
+    
+    
+            var marker_69afd944b7c70372b2bdf79c5dd430e3 = L.marker(
+                [34.335372, 61.850246],
+                {}
+            ).addTo(map_6315e0880c1c932a9fb9b105894d9b95);
+        
+    
+        var popup_bb7bfd64f0bf1c9f411470f768dea179 = L.popup({"maxWidth": "100%"});
+
+        
+            
+                var html_079007a7580753e234042997ab5538eb = $(`<div id="html_079007a7580753e234042997ab5538eb" style="width: 100.0%; height: 100.0%;"><b>Соломенский лесозавод</b><br>Производственный объем: 300000<br>Количество работников: 316</div>`)[0];
+                popup_bb7bfd64f0bf1c9f411470f768dea179.setContent(html_079007a7580753e234042997ab5538eb);
+            
+        
+
+        marker_69afd944b7c70372b2bdf79c5dd430e3.bindPopup(popup_bb7bfd64f0bf1c9f411470f768dea179)
+        ;
+
+        
+    
+    
+            var marker_7366ad71055c89a0a23aa4ac857fe807 = L.marker(
+                [34.285086, 61.823331],
+                {}
+            ).addTo(map_6315e0880c1c932a9fb9b105894d9b95);
+        
+    
+        var popup_fd9195973503f76f008dd770de3add65 = L.popup({"maxWidth": "100%"});
+
+        
+            
+                var html_b175b6d659fe2ba59095bd0a09086d21 = $(`<div id="html_b175b6d659fe2ba59095bd0a09086d21" style="width: 100.0%; height: 100.0%;"><b>Русский лесной альянс</b><br>Производственный объем: 50000<br>Количество работников: 257</div>`)[0];
+                popup_fd9195973503f76f008dd770de3add65.setContent(html_b175b6d659fe2ba59095bd0a09086d21);
+            
+        
+
+        marker_7366ad71055c89a0a23aa4ac857fe807.bindPopup(popup_fd9195973503f76f008dd770de3add65)
+        ;
+
+        
+    
+    
+            var marker_815906d8e6d212fcc5b6bc4624cdde13 = L.marker(
+                [34.27157, 62.182857],
+                {}
+            ).addTo(map_6315e0880c1c932a9fb9b105894d9b95);
+        
+    
+        var popup_e11eefadf617ef82ac423b3b8114ec0e = L.popup({"maxWidth": "100%"});
+
+        
+            
+                var html_9038dc748b3f10e3f052576974e033f8 = $(`<div id="html_9038dc748b3f10e3f052576974e033f8" style="width: 100.0%; height: 100.0%;"><b>Кондопожский ЦБК</b><br>Производственный объем: 690000<br>Количество работников: 2854</div>`)[0];
+                popup_e11eefadf617ef82ac423b3b8114ec0e.setContent(html_9038dc748b3f10e3f052576974e033f8);
+            
+        
+
+        marker_815906d8e6d212fcc5b6bc4624cdde13.bindPopup(popup_e11eefadf617ef82ac423b3b8114ec0e)
+        ;
+
+        
+    
+    
+            var feature_group_a5e23de350a2429116e129631d15e5a5 = L.featureGroup(
+                {}
+            );
+        
+    
+            var poly_line_4cd372999d5922461b25439d11fa16f7 = L.polyline(
+                [[62.09, 30.9685], [62.092, 30.97]],
+                {"bubblingMouseEvents": true, "color": "green", "dashArray": null, "dashOffset": null, "fill": false, "fillColor": "green", "fillOpacity": 0.2, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "noClip": false, "opacity": 1.0, "smoothFactor": 1.0, "stroke": true, "weight": 10}
+            ).addTo(feature_group_a5e23de350a2429116e129631d15e5a5);
+        
+    
+        var popup_9c01d83f0033b6f1f6222b1757968631 = L.popup({"maxWidth": "100%"});
+
+        
+            
+                var html_e634d41cec4b3733adaa95b3e1c50c63 = $(`<div id="html_e634d41cec4b3733adaa95b3e1c50c63" style="width: 100.0%; height: 100.0%;">Расстояние: 1500.00 км<br>Время в пути: 1:30:00 ч<br>Вместимость: 35.00 т</div>`)[0];
+                popup_9c01d83f0033b6f1f6222b1757968631.setContent(html_e634d41cec4b3733adaa95b3e1c50c63);
+            
+        
+
+        poly_line_4cd372999d5922461b25439d11fa16f7.bindPopup(popup_9c01d83f0033b6f1f6222b1757968631)
+        ;
+
+        
+    
+    
+            var poly_line_7b5a2e458b6ccf004a36693a6ea30c1f = L.polyline(
+                [[62.091, 30.9695], [62.092, 30.97]],
+                {"bubblingMouseEvents": true, "color": "green", "dashArray": null, "dashOffset": null, "fill": false, "fillColor": "green", "fillOpacity": 0.2, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "noClip": false, "opacity": 1.0, "smoothFactor": 1.0, "stroke": true, "weight": 10}
+            ).addTo(feature_group_a5e23de350a2429116e129631d15e5a5);
+        
+    
+        var popup_64c082e177eb95cc7e4bf3624d66f780 = L.popup({"maxWidth": "100%"});
+
+        
+            
+                var html_77308fae0eb2a2961980db01e948cb7c = $(`<div id="html_77308fae0eb2a2961980db01e948cb7c" style="width: 100.0%; height: 100.0%;">Расстояние: 800.00 км<br>Время в пути: 1:00:00 ч<br>Вместимость: 25.00 т</div>`)[0];
+                popup_64c082e177eb95cc7e4bf3624d66f780.setContent(html_77308fae0eb2a2961980db01e948cb7c);
+            
+        
+
+        poly_line_7b5a2e458b6ccf004a36693a6ea30c1f.bindPopup(popup_64c082e177eb95cc7e4bf3624d66f780)
+        ;
+
+        
+    
+    
+            var poly_line_67e01eee7a1291f71eb158f09683bdc2 = L.polyline(
+                [[62.0905, 30.969], [61.7849, 34.3596]],
+                {"bubblingMouseEvents": true, "color": "green", "dashArray": null, "dashOffset": null, "fill": false, "fillColor": "green", "fillOpacity": 0.2, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "noClip": false, "opacity": 1.0, "smoothFactor": 1.0, "stroke": true, "weight": 10}
+            ).addTo(feature_group_a5e23de350a2429116e129631d15e5a5);
+        
+    
+        var popup_abc98b4c80a5e301dd5bedcc752fa534 = L.popup({"maxWidth": "100%"});
+
+        
+            
+                var html_b6dbe33261d143b8697bf624c69e9000 = $(`<div id="html_b6dbe33261d143b8697bf624c69e9000" style="width: 100.0%; height: 100.0%;">Расстояние: 6500.00 км<br>Время в пути: 5:30:00 ч<br>Вместимость: 50.00 т</div>`)[0];
+                popup_abc98b4c80a5e301dd5bedcc752fa534.setContent(html_b6dbe33261d143b8697bf624c69e9000);
+            
+        
+
+        poly_line_67e01eee7a1291f71eb158f09683bdc2.bindPopup(popup_abc98b4c80a5e301dd5bedcc752fa534)
+        ;
+
+        
+    
+    
+            var poly_line_5e30f7f4073344cd8011b4f3c2a0ec6f = L.polyline(
+                [[62.09, 30.9685], [62.092, 30.97]],
+                {"bubblingMouseEvents": true, "color": "green", "dashArray": null, "dashOffset": null, "fill": false, "fillColor": "green", "fillOpacity": 0.2, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "noClip": false, "opacity": 1.0, "smoothFactor": 1.0, "stroke": true, "weight": 10}
+            ).addTo(feature_group_a5e23de350a2429116e129631d15e5a5);
+        
+    
+        var popup_389e2ff12077b53d2b199f6102bb8be3 = L.popup({"maxWidth": "100%"});
+
+        
+            
+                var html_b751ee27e4ccddc25917f043a7f777d8 = $(`<div id="html_b751ee27e4ccddc25917f043a7f777d8" style="width: 100.0%; height: 100.0%;">Расстояние: 1500.00 км<br>Время в пути: 1:30:00 ч<br>Вместимость: 35.00 т</div>`)[0];
+                popup_389e2ff12077b53d2b199f6102bb8be3.setContent(html_b751ee27e4ccddc25917f043a7f777d8);
+            
+        
+
+        poly_line_5e30f7f4073344cd8011b4f3c2a0ec6f.bindPopup(popup_389e2ff12077b53d2b199f6102bb8be3)
+        ;
+
+        
+    
+    
+            var poly_line_afd6c52998175442f0b835a5acaa4283 = L.polyline(
+                [[62.091, 30.9695], [62.092, 30.97]],
+                {"bubblingMouseEvents": true, "color": "green", "dashArray": null, "dashOffset": null, "fill": false, "fillColor": "green", "fillOpacity": 0.2, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "noClip": false, "opacity": 1.0, "smoothFactor": 1.0, "stroke": true, "weight": 10}
+            ).addTo(feature_group_a5e23de350a2429116e129631d15e5a5);
+        
+    
+        var popup_960c877bc4f52efdb63cfe296486148d = L.popup({"maxWidth": "100%"});
+
+        
+            
+                var html_aa86dbbd8488f80c0074ba7c7fd856f7 = $(`<div id="html_aa86dbbd8488f80c0074ba7c7fd856f7" style="width: 100.0%; height: 100.0%;">Расстояние: 800.00 км<br>Время в пути: 1:00:00 ч<br>Вместимость: 25.00 т</div>`)[0];
+                popup_960c877bc4f52efdb63cfe296486148d.setContent(html_aa86dbbd8488f80c0074ba7c7fd856f7);
+            
+        
+
+        poly_line_afd6c52998175442f0b835a5acaa4283.bindPopup(popup_960c877bc4f52efdb63cfe296486148d)
+        ;
+
+        
+    
+    
+            var poly_line_f15f85cdbbc5e804e30afc8763cca072 = L.polyline(
+                [[62.091, 30.9695], [62.092, 30.97]],
+                {"bubblingMouseEvents": true, "color": "green", "dashArray": null, "dashOffset": null, "fill": false, "fillColor": "green", "fillOpacity": 0.2, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "noClip": false, "opacity": 1.0, "smoothFactor": 1.0, "stroke": true, "weight": 10}
+            ).addTo(feature_group_a5e23de350a2429116e129631d15e5a5);
+        
+    
+        var popup_44fd4e4623f58c276de26294843036d5 = L.popup({"maxWidth": "100%"});
+
+        
+            
+                var html_57b6d30a8f9c9806c203984c4ba91589 = $(`<div id="html_57b6d30a8f9c9806c203984c4ba91589" style="width: 100.0%; height: 100.0%;">Расстояние: 800.00 км<br>Время в пути: 1:00:00 ч<br>Вместимость: 25.00 т</div>`)[0];
+                popup_44fd4e4623f58c276de26294843036d5.setContent(html_57b6d30a8f9c9806c203984c4ba91589);
+            
+        
+
+        poly_line_f15f85cdbbc5e804e30afc8763cca072.bindPopup(popup_44fd4e4623f58c276de26294843036d5)
+        ;
+
+        
+    
+    
+            var poly_line_e5ee66748d33338b9315a89bedb0b739 = L.polyline(
+                [[61.70352877, 33.33356692], [61.850246, 34.335372]],
+                {"bubblingMouseEvents": true, "color": "green", "dashArray": null, "dashOffset": null, "fill": false, "fillColor": "green", "fillOpacity": 0.2, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "noClip": false, "opacity": 1.0, "smoothFactor": 1.0, "stroke": true, "weight": 10}
+            ).addTo(feature_group_a5e23de350a2429116e129631d15e5a5);
+        
+    
+        var popup_376aaa327233fe149ee509f930233d0a = L.popup({"maxWidth": "100%"});
+
+        
+            
+                var html_d0d8a179e30fea1ab1ae3720287c6eb2 = $(`<div id="html_d0d8a179e30fea1ab1ae3720287c6eb2" style="width: 100.0%; height: 100.0%;">Расстояние: 68 км<br>Время в пути: 1:22:00 ч<br>Вместимость: 0 т</div>`)[0];
+                popup_376aaa327233fe149ee509f930233d0a.setContent(html_d0d8a179e30fea1ab1ae3720287c6eb2);
+            
+        
+
+        poly_line_e5ee66748d33338b9315a89bedb0b739.bindPopup(popup_376aaa327233fe149ee509f930233d0a)
+        ;
+
+        
+    
+    
+            feature_group_a5e23de350a2429116e129631d15e5a5.addTo(map_6315e0880c1c932a9fb9b105894d9b95);
+        
+    
+            var layer_control_6f395641f4741e3e2b0185bcfd8989de_layers = {
+                base_layers : {
+                    "openstreetmap" : tile_layer_ed8662d958ec7d810db3703a69d416a1,
+                },
+                overlays :  {
+                    "\u041c\u0430\u0440\u0448\u0440\u0443\u0442\u044b" : feature_group_a5e23de350a2429116e129631d15e5a5,
+                },
+            };
+            let layer_control_6f395641f4741e3e2b0185bcfd8989de = L.control.layers(
+                layer_control_6f395641f4741e3e2b0185bcfd8989de_layers.base_layers,
+                layer_control_6f395641f4741e3e2b0185bcfd8989de_layers.overlays,
+                {"autoZIndex": true, "collapsed": true, "position": "topright"}
+            ).addTo(map_6315e0880c1c932a9fb9b105894d9b95);
+
+        
+</script>
+</html>

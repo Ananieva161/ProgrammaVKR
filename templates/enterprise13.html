@@ -1,0 +1,1439 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ enterprise[1] }} - Редактирование</title>
+    <!-- Leaflet CSS -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css">
+<!-- Leaflet JS -->
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<!-- Leaflet Routing Machine CSS -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.css">
+<!-- Leaflet Routing Machine JS -->
+<script src="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.js"></script>
+    <style>
+        /* Стили страницы */
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f5f3;
+      color: #2c5b4b;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 5px;
+            background-color: #6dbd9e;
+      color: white;
+        }
+        .tabs {
+            display: flex;
+            margin: 20px 0;
+        }
+        .tab {
+            padding: 10px 20px;
+            border: 1px solid #ccc;
+            margin-right: 5px;
+            cursor: pointer;
+        }
+        .tab-content {
+            margin-top: 20px;
+        }
+        .map {
+            width: 600px;
+            height: 400px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            padding: 8px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <h1>{{ enterprise[1] }}</h1>
+    <p>Местоположение: {{ enterprise[2] }}</p>
+    <img src="{{ url_for('static', filename='enterprise_logo.png') }}" alt="Логотип" width="100">
+</div>
+
+<!-- Вкладки для каждой категории данных -->
+<div class="tabs">
+    <div class="tab " onclick="showTab('location')">Местоположение</div>
+    <div class="tab" onclick="showTab('production')">Продукция</div>
+    <div class="tab" onclick="showTab('equipment')">Оборудование</div>
+    <div class="tab" onclick="showTab('labor_resources')">Трудовые ресурсы</div>
+    <div class="tab" onclick="showTab('consumers')">Потребители продукции</div>
+    <div class="tab active" onclick="showTab('balance')">Баланс продукции</div>
+    <div class="tab active" onclick="showTab('profitabilitys')">Расчет рентабельности</div>
+</div>
+
+<div id="location" class="tab-content" style="display:none;">
+    <h2>Местоположение: {{ enterprise[2] }}</h2>
+    <div id="map" class="map" style="width: 100%; height: 600px;"></div>
+    <button id="edit-location-btn" data-enterprise-id="{{ enterprise[0] }}" class="btn btn-primary" style="background-color:gray; cursor:not-allowed;">Редактировать местоположение</button>
+    <button id="save-location-btn" data-enterprise-id="{{ enterprise[0] }}" class="btn btn-success" style="display:none;">Сохранить</button>
+    <button id="cancel-location-btn" class="btn btn-danger" style="display:none;">Отмена</button>
+
+    <div id="location-table">
+        <h4>Таблица данных</h4>
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Местоположение</th>
+                    <th>Рентабельность</th>
+                    <th>Дистанция</th>
+                    <th>Тариф</th>
+                    <th>Откуда - Куда</th>
+                    <th>Выбрать</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in location_table %}
+                    <tr>
+                        <td>{{ loop.index + 1 }}</td>
+                        <td>{{ row['address'] }}</td>
+                        <td>{{ row['profitability'] }}</td>
+                        <td>{{ row['distance'] }}</td>
+                        <td>{{ row['road_tariff'] }}</td>
+                        <td>{{ row['from_to'] }}</td>
+                        <td>
+                            <button class="btn btn-info" onclick="selectLocation({{ row['id'] }}, '{{ row['address'] }}')">Да</button>
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+<script>
+let map = null;
+let enterpriseMarker = null;
+let newMarkers = [];
+let supplierMarkers = [];
+let consumerMarkers = [];
+let routeControls = [];
+let markerCount = 1; // ← в начало скрипта
+let rowCounter = 1;  // ← счётчик строк в таблице
+
+
+const supplierIcon = L.divIcon({ html: '<div style="width: 20px; height: 20px; background-color: green;"></div>' });
+const consumerIcon = L.divIcon({ html: '<div style="width: 20px; height: 20px; background-color: blue; border-radius: 50%;"></div>' });
+
+function showTab(tabName) {
+    document.querySelectorAll('.tab-content').forEach(tab => tab.style.display = 'none');
+    const currentTab = document.getElementById(tabName);
+    if (currentTab) currentTab.style.display = 'block';
+    if (tabName === 'location' && map === null) initMap();
+}
+
+function initMap() {
+    map = L.map('map').setView([62.0, 33.0], 7);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+    try {
+        const coords = '{{ enterprise[2] }}'.replace(/[()]/g, '').split(',');
+        const lat = parseFloat(coords[1].trim());
+        const lon = parseFloat(coords[0].trim());
+        if (!isNaN(lat) && !isNaN(lon)) {
+            enterpriseMarker = L.marker([lat, lon], { draggable: true }).addTo(map)
+                .bindPopup(`<b>{{ enterprise[1] }}</b>`).openPopup();
+
+            enterpriseMarker.on('dragend', function() {
+                const latlng = enterpriseMarker.getLatLng();
+                const dmsCoords = formatCoordsToDMS(latlng);
+                updateEnterpriseLocation(latlng, dmsCoords);
+            });
+        }
+    } catch (e) {
+        console.error("Ошибка в координатах предприятия:", e);
+    }
+
+    {% for supplier in suppliers %}
+        try {
+            let supplierCoords = '{{ supplier[2] }}'.replace(/[()]/g, '').split(',');
+            let lat = parseFloat(supplierCoords[0].trim());
+            let lon = parseFloat(supplierCoords[1].trim());
+            if (!isNaN(lat) && !isNaN(lon)) {
+                let supplierMarker = L.marker([lat, lon], { icon: supplierIcon }).addTo(map)
+                    .bindPopup("<b>{{ supplier[1] }}</b>");
+                supplierMarker.name = "{{ supplier[1] }}";
+                supplierMarkers.push(supplierMarker);
+            }
+        } catch (e) {
+            console.error("Ошибка координат поставщика:", e);
+        }
+    {% endfor %}
+
+    {% for consumer in consumers %}
+        try {
+            const conCoords = '{{ consumer[2] }}'.replace(/[()]/g, '').split(',');
+            const lat = parseFloat(conCoords[1].trim());
+            const lon = parseFloat(conCoords[0].trim());
+            if (!isNaN(lat) && !isNaN(lon)) {
+                const consumerMarker = L.marker([lat, lon], { icon: consumerIcon }).addTo(map)
+                    .bindPopup("<b>{{ consumer[1] }}</b>");
+                consumerMarker.name = "{{ consumer[1] }}";
+                consumerMarkers.push(consumerMarker);
+            }
+        } catch (e) {
+            console.error("Ошибка координат потребителя:", e);
+        }
+    {% endfor %}
+
+    drawRoutesAndRecalculate(true);
+       // Добавление легенды
+    addLegend();
+
+
+    map.on('dblclick', e => {
+        const newMarker = L.marker([e.latlng.lat, e.latlng.lng]).addTo(map)
+            .bindPopup(`<b>Новая точка №${markerCount}</b>`).openPopup();
+        newMarkers.push(newMarker);
+        drawRoutesAndRecalculate(false, newMarker);
+        markerCount++;  // Увеличиваем счётчик маркеров
+    });
+}
+
+// Функция для добавления легенды
+function addLegend() {
+    const legend = L.control({ position: 'bottomleft' });
+
+    legend.onAdd = function () {
+        const div = L.DomUtil.create('div', 'legend');
+        div.innerHTML = `
+            <h4>Легенда</h4>
+            <div>
+                <div style="width: 20px; height: 20px; background-color: green; display: inline-block;"></div>
+                <span> Поставщик</span>
+            </div>
+            <div>
+                <div style="width: 20px; height: 20px; background-color: blue; border-radius: 50%; display: inline-block;"></div>
+                <span> Потребитель</span>
+            </div>
+        `;
+        return div;
+    };
+
+    legend.addTo(map);
+}
+function toDMS(deg, isLat) {
+    const d = Math.floor(Math.abs(deg));
+    const minFloat = (Math.abs(deg) - d) * 60;
+    const m = Math.floor(minFloat);
+    const s = ((minFloat - m) * 60).toFixed(2);
+    const dir = deg >= 0
+        ? (isLat ? 'N (Север)' : 'E (Восток)')
+        : (isLat ? 'S (Юг)' : 'W (Запад)');
+    return `${d}°${m}'${s}" ${dir}`;
+}
+
+
+function formatCoordsToDMS(latlng) {
+    return `${toDMS(latlng.lat, true)}, ${toDMS(latlng.lng, false)}`;
+}
+
+function dmsToDecimal(degrees, minutes, seconds, direction) {
+    const decimal = degrees + (minutes / 60) + (seconds / 3600);
+    return (direction === 'S' || direction === 'W') ? -decimal : decimal;
+}
+
+function dmsToLatLng(dmsLat, dmsLng) {
+    const [latDeg, latMin, latSec, latDir] = dmsLat.split(/[\s°'"]+/).map(val => parseFloat(val));
+    const [lngDeg, lngMin, lngSec, lngDir] = dmsLng.split(/[\s°'"]+/).map(val => parseFloat(val));
+
+    const lat = dmsToDecimal(latDeg, latMin, latSec, latDir);
+    const lng = dmsToDecimal(lngDeg, lngMin, lngSec, lngDir);
+
+    return { lat, lng };
+}
+
+function drawRoutesAndRecalculate(isEnterprise, marker = null) {
+    if (!isEnterprise && marker) {
+        const result = calculateRoutes(marker);
+        addToTable(`Новая точка №${markerCount}`, '', result.tariff, result.distance, false, marker.getLatLng());
+
+        supplierMarkers.forEach(supplierMarker => {
+            const dist = marker.getLatLng().distanceTo(supplierMarker.getLatLng()) / 1000;
+<!--            addToTable(`Поставщик - ${supplierMarker.name}`, '', result.tariff, dist.toFixed(2), false, supplierMarker.getLatLng());-->
+            drawRoute(marker, supplierMarker, 'green');
+        });
+
+        consumerMarkers.forEach(consumerMarker => {
+            const dist = marker.getLatLng().distanceTo(consumerMarker.getLatLng()) / 1000;
+<!--            addToTable(`Предприятие - Потребитель ${consumerMarker.name}`, '', result.tariff, dist.toFixed(2), false, consumerMarker.getLatLng());-->
+            drawRoute(marker, consumerMarker, 'blue');
+        });
+
+    } else if (isEnterprise && enterpriseMarker) {
+        const result = calculateRoutes(enterpriseMarker);
+        addToTable("Текущее местоположение", '', result.tariff, result.distance, true, enterpriseMarker.getLatLng());
+
+        supplierMarkers.forEach(supplierMarker => {
+            const dist = enterpriseMarker.getLatLng().distanceTo(supplierMarker.getLatLng()) / 1000;
+<!--            addToTable(`Поставщик - ${supplierMarker.name}`, '', result.tariff, dist.toFixed(2), true, supplierMarker.getLatLng());-->
+            drawRoute(enterpriseMarker, supplierMarker, 'green');
+        });
+
+        consumerMarkers.forEach(consumerMarker => {
+            const dist = enterpriseMarker.getLatLng().distanceTo(consumerMarker.getLatLng()) / 1000;
+<!--            addToTable(`Предприятие - Потребитель ${consumerMarker.name}`, '', result.tariff, dist.toFixed(2), true, consumerMarker.getLatLng());-->
+            drawRoute(enterpriseMarker, consumerMarker, 'blue');
+        });
+    }
+}
+
+function drawRoute(fromMarker, toMarker, color) {
+    const ctrl = L.Routing.control({
+        waypoints: [fromMarker.getLatLng(), toMarker.getLatLng()],
+        lineOptions: { styles: [{ color: color, weight: 4 }] },
+        createMarker: () => null,
+        routeWhileDragging: false,
+        addWaypoints: false
+    }).addTo(map);
+    routeControls.push(ctrl);
+}
+
+function calculateRoutes(baseMarker) {
+    let totalSupplierDistance = 0;
+    let totalConsumerDistance = 0;
+
+    supplierMarkers.forEach(marker => {
+        totalSupplierDistance += baseMarker.getLatLng().distanceTo(marker.getLatLng()) / 1000;
+    });
+
+    consumerMarkers.forEach(marker => {
+        totalConsumerDistance += baseMarker.getLatLng().distanceTo(marker.getLatLng()) / 1000;
+    });
+
+    const supplierTariff = totalSupplierDistance * 25.8;
+    const consumerTariff = totalConsumerDistance * 6.27;
+
+    return {
+        tariff: (supplierTariff + consumerTariff).toFixed(2),
+        distance: (totalSupplierDistance + totalConsumerDistance).toFixed(2)
+    };
+}
+
+function addToTable(label, coords, tariff, distance, isCurrent, latlng = null) {
+    const tableBody = document.querySelector('#location-table tbody');
+    const row = document.createElement('tr');
+    const rowId = `profitability-${Math.random().toString(36).substring(2, 8)}`;
+
+    // Создание заголовка гармошки
+    row.innerHTML = `
+        <td><button class="accordion">+</button></td>
+        <td>${latlng ? formatCoordsToDMS(latlng) : coords}</td>
+        <td id="${rowId}">...</td>
+        <td>${distance} км</td>
+        <td>${tariff} руб</td>
+        <td>${label}</td>
+        <td><button class="btn btn-info">${isCurrent ? 'Да' : 'Нет'}</button></td>
+    `;
+
+    // Раздел для раскрытия
+    const detailsRow = document.createElement('tr');
+    detailsRow.classList.add('details');
+    detailsRow.style.display = 'none'; // Изначально скрыто
+
+    detailsRow.innerHTML = `
+        <td colspan="7">
+            <div class="routes">
+                <p>Маршрут: Поставщики и Потребители</p>
+            </div>
+        </td>
+    `;
+    row.appendChild(detailsRow);
+    tableBody.appendChild(row);
+
+    const accordionBtn = row.querySelector('.accordion');
+    accordionBtn.addEventListener('click', () => {
+        const details = detailsRow;
+        const isVisible = details.style.display === 'table-row';
+        details.style.display = isVisible ? 'none' : 'table-row';
+        accordionBtn.textContent = isVisible ? '+' : '-';
+    });
+
+    if (latlng) {
+        row.setAttribute('data-lat', latlng.lat);
+        row.setAttribute('data-lng', latlng.lng);
+        row.classList.add('clickable-row');
+        row.addEventListener('click', () => {
+            map.setView([latlng.lat, latlng.lng], 11);
+            const highlight = L.circleMarker([latlng.lat, latlng.lng], {
+                radius: 10,
+                color: 'red',
+                fillColor: '#f03',
+                fillOpacity: 0.5,
+            }).addTo(map).bringToFront().bindPopup('Выбрано').openPopup();
+
+            setTimeout(() => {
+                map.removeLayer(highlight);
+            }, 3000);
+        });
+    }
+
+    recalculateProfitability(tariff, rowId, latlng);
+}
+
+let activeRoute = null; // глобальная переменная для текущего маршрута
+function addToTable(label, coords, tariff, distance, isCurrent, latlng = null) {
+    const tableBody = document.querySelector('#location-table tbody');
+
+    // Нумерация строки — уже есть
+    const rowNumber = tableBody.querySelectorAll('tr.main-row').length + 1;
+
+    // --- Основная строка (только предприятие с суммарной информацией) ---
+<!--    if (!isCurrent) return; // Показываем в таблице только предприятие (текущий маркер)-->
+
+    // Получаем общие значения тарифа и расстояния для предприятия
+    const totalData = calculateRoutes({ getLatLng: () => latlng });
+
+    // Создаём строку с основной информацией
+    const row = document.createElement('tr');
+    row.classList.add('main-row');
+    const rowId = `profitability-${Math.random().toString(36).substring(2, 8)}`;
+
+    row.innerHTML = `
+        <td>${rowNumber}</td>
+        <td><button class="accordion">+</button></td>
+        <td>${latlng ? formatCoordsToDMS(latlng) : coords}</td>
+        <td id="${rowId}">${(totalData.tariff / (totalData.distance || 1) * 100).toFixed(2)}%</td>
+        <td>${totalData.distance} км</td>
+        <td>${totalData.tariff} руб</td>
+        <td>${label}</td>
+        <td><button class="btn btn-info">${isCurrent ? 'Да' : 'Нет'}</button></td>
+    `;
+
+    tableBody.appendChild(row);
+
+    // --- Строка с деталями (маршруты к каждому поставщику и потребителю) ---
+    const detailsRow = document.createElement('tr');
+    detailsRow.classList.add('details');
+    detailsRow.style.display = 'none';
+
+    // Формируем списки поставщиков и потребителей с пустыми данными маршрутов (заполнятся при клике)
+    detailsRow.innerHTML = `
+        <td colspan="8">
+            <div class="routes">
+                <p><strong>Маршруты:</strong></p>
+                <details>
+                    <summary style="color: green;">Поставщики</summary>
+                    <ul>
+                        ${supplierMarkers.map((m, i) => `
+                            <li>
+                                <a href="#" class="route-link" data-type="supplier" data-index="${i}">
+                                    ${m.name || 'Поставщик ' + (i + 1)}
+                                </a> — <span class="route-info" data-type="supplier" data-index="${i}">расчёт...</span>
+                            </li>
+                        `).join('')}
+                    </ul>
+                </details>
+                <details>
+                    <summary style="color: blue;">Потребители</summary>
+                    <ul>
+                        ${consumerMarkers.map((m, i) => `
+                            <li>
+                                <a href="#" class="route-link" data-type="consumer" data-index="${i}">
+                                    ${m.name || 'Потребитель ' + (i + 1)}
+                                </a> — <span class="route-info" data-type="consumer" data-index="${i}">расчёт...</span>
+                            </li>
+                        `).join('')}
+                    </ul>
+                </details>
+            </div>
+        </td>
+    `;
+
+    tableBody.appendChild(detailsRow);
+
+    // --- Переключение гармошки ---
+    const accordionBtn = row.querySelector('.accordion');
+    accordionBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const isVisible = detailsRow.style.display === 'table-row';
+        detailsRow.style.display = isVisible ? 'none' : 'table-row';
+        accordionBtn.textContent = isVisible ? '+' : '-';
+    });
+
+    // --- Центрирование и подсветка при клике по строке ---
+    if (latlng) {
+        row.classList.add('clickable-row');
+        row.addEventListener('click', () => {
+            map.setView([latlng.lat, latlng.lng], 11);
+            const highlight = L.circleMarker([latlng.lat, latlng.lng], {
+                radius: 10,
+                color: 'red',
+                fillColor: '#f03',
+                fillOpacity: 0.5,
+            }).addTo(map).bringToFront().bindPopup('Выбрано').openPopup();
+            setTimeout(() => map.removeLayer(highlight), 3000);
+        });
+    }
+
+    // --- Обработчики кликов по маршрутам (для каждого поставщика/потребителя) ---
+    const links = detailsRow.querySelectorAll('.route-link');
+    links.forEach(link => {
+        link.addEventListener('click', e => {
+            e.preventDefault();
+            e.stopPropagation();
+
+            const type = link.dataset.type;
+            const index = parseInt(link.dataset.index);
+
+            const targetMarker = (type === 'supplier' ? supplierMarkers : consumerMarkers)[index];
+
+            // Удаляем старый маршрут
+            if (activeRoute) {
+                map.removeControl(activeRoute);
+                activeRoute = null;
+            }
+
+            // Строим маршрут на карте
+            activeRoute = L.Routing.control({
+                waypoints: [
+                    L.latLng(latlng.lat, latlng.lng),
+                    targetMarker.getLatLng()
+                ],
+                lineOptions: { styles: [{ color: type === 'supplier' ? 'red' : 'red', weight: 10 }] },
+                draggableWaypoints: false,
+                addWaypoints: false,
+                fitSelectedRoutes: true,
+                createMarker: () => null
+            }).addTo(map);
+
+            // После построения маршрута обновляем данные маршрута в списке
+            activeRoute.on('routesfound', function (e) {
+                const route = e.routes[0];
+                const distanceKm = (route.summary.totalDistance / 1000).toFixed(2);
+                const durationMin = Math.round(route.summary.totalTime / 60);
+                const tariffCalc = (type === 'supplier' ? 25.8 : 6.27) * distanceKm;
+
+                // Обновляем текст рядом с ссылкой
+                const routeInfoSpan = detailsRow.querySelector(`.route-info[data-type="${type}"][data-index="${index}"]`);
+                if (routeInfoSpan) {
+                    routeInfoSpan.textContent = `${distanceKm} км, ${tariffCalc.toFixed(2)} руб, ${durationMin} мин`;
+                }
+            });
+
+            // Автоматическое удаление маршрута через 30 сек
+            setTimeout(() => {
+                if (activeRoute) {
+                    map.removeControl(activeRoute);
+                    activeRoute = null;
+                }
+            }, 30000);
+        });
+    });
+
+    // --- Обновление рентабельности в таблице (если надо) ---
+    recalculateProfitability(tariff, rowId, latlng);
+}
+
+
+function recalculateProfitability(tariff, elementId, latlng = null) {
+    fetch('/recalculate-profitability', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            enterprise_id: {{ enterprise[0] }},
+            tariff: tariff,
+            lat: latlng?.lat ?? null,
+            lng: latlng?.lng ?? null
+        })
+    })
+    .then(res => res.json())
+    .then(data => {
+        const cell = document.getElementById(elementId);
+        const profitability = Math.min(data.profitability, 100);
+if (data.profitability !== undefined && !isNaN(data.profitability)) {
+    cell.innerText = `${profitability.toFixed(2)}%`;
+} else {
+    cell.innerText = 'Ошибка';
+}
+
+<!--        if (data.profitability !== undefined) {-->
+<!--            const profitability = Math.min(data.profitability, 100);-->
+<!--            cell.innerText = `${data.profitability.toFixed(2)}%`;-->
+<!--        } else {-->
+<!--            cell.innerText = 'Ошибка';-->
+<!--        }-->
+    })
+    .catch(err => {
+        console.error("Ошибка при расчете рентабельности:", err);
+        document.getElementById(elementId).innerText = 'Ошибка';
+    });
+}
+
+function updateEnterpriseLocation(latlng, dmsCoords) {
+    const data = {
+        lat: latlng.lat,
+        lng: latlng.lng,
+        dmsCoords: dmsCoords
+    };
+
+    fetch('/update-enterprise-location', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+    })
+    .then(res => res.json())
+    .then(response => {
+        console.log("Местоположение предприятия обновлено:", response);
+    })
+    .catch(err => {
+        console.error("Ошибка при обновлении местоположения предприятия:", err);
+    });
+}
+function enableInteractiveTableRoutes(row, detailsRow, latlng, routes) {
+    // 1. Подсветка маркера при клике на строку таблицы
+    if (latlng) {
+        row.addEventListener('click', () => {
+            map.setView([latlng.lat, latlng.lng], 11);
+            const highlight = L.circleMarker([latlng.lat, latlng.lng], {
+                radius: 10, color: 'red', fillColor: '#f03', fillOpacity: 0.5
+            }).addTo(map).bringToFront().bindPopup('Выбрано').openPopup();
+            setTimeout(() => map.removeLayer(highlight), 3000);
+        });
+    }
+
+    // 2. Обработка раскрывающейся строки с маршрутами
+    const accordionBtn = row.querySelector('.accordion');
+    if (accordionBtn) {
+        accordionBtn.addEventListener('click', (e) => {
+            e.stopPropagation(); // Не триггерим клик строки
+            const isVisible = detailsRow.style.display === 'table-row';
+            detailsRow.style.display = isVisible ? 'none' : 'table-row';
+            accordionBtn.textContent = isVisible ? '+' : '-';
+        });
+    }
+
+    // 3. Создание и навешивание обработчиков на строки маршрутов
+    if (routes.length > 0 && detailsRow) {
+        const routeLinks = detailsRow.querySelectorAll('.route-link');
+        routeLinks.forEach((linkEl, i) => {
+            const route = routes[i];
+            linkEl.addEventListener('click', (e) => {
+                e.stopPropagation();
+                map.fitBounds(route.line.getBounds());
+                const originalColor = route.type === 'Поставщик' ? 'green' : 'blue';
+                route.line.setStyle({ weight: 8, color: 'red' });
+                setTimeout(() => {
+                    route.line.setStyle({ weight: 4, color: originalColor });
+                }, 3000);
+            });
+        });
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    showTab('location');
+});
+</script>
+
+<style>
+.clickable-row:hover {
+    background-color: #f0f8ff;
+    cursor: pointer;
+}
+
+.accordion {
+    background-color: #f1f1f1;
+    border: none;
+    color: #444;
+    padding: 10px;
+    width: 100%;
+    text-align: left;
+    cursor: pointer;
+    font-size: 15px;
+    border-radius: 5px;
+}
+
+.accordion:hover {
+    background-color: #ddd;
+}
+
+.details {
+    padding: 10px;
+    background-color: #f9f9f9;
+}
+
+.details .routes {
+    margin-top: 10px;
+    padding-left: 20px;
+}
+</style>
+
+
+<!--<script>-->
+<!--let map = null;-->
+<!--let enterpriseMarker = null;-->
+<!--let newMarkers = [];-->
+<!--let supplierMarkers = [];-->
+<!--let consumerMarkers = [];-->
+<!--let routeControls = []; // Сюда будем сохранять все маршруты-->
+
+<!--const supplierIcon = L.divIcon({ html: '<div style="width: 20px; height: 20px; background-color: green;"></div>' });-->
+<!--const consumerIcon = L.divIcon({ html: '<div style="width: 20px; height: 20px; background-color: blue; border-radius: 50%;"></div>' });-->
+
+<!--function showTab(tabName) {-->
+<!--    document.querySelectorAll('.tab-content').forEach(tab => tab.style.display = 'none');-->
+<!--    const currentTab = document.getElementById(tabName);-->
+<!--    if (currentTab) currentTab.style.display = 'block';-->
+<!--    if (tabName === 'location' && map === null) initMap();-->
+<!--}-->
+
+<!--function initMap() {-->
+<!--    map = L.map('map').setView([62.0, 33.0], 7);-->
+<!--    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);-->
+
+<!--    try {-->
+<!--        const coords = '{{ enterprise[2] }}'.replace(/[()]/g, '').split(',');-->
+<!--        const lat = parseFloat(coords[1].trim());-->
+<!--        const lon = parseFloat(coords[0].trim());-->
+
+<!--        if (!isNaN(lat) && !isNaN(lon)) {-->
+<!--            enterpriseMarker = L.marker([lat, lon], { draggable: false }).addTo(map)-->
+<!--                .bindPopup(`<b>{{ enterprise[1] }}</b>`).openPopup();-->
+<!--        }-->
+<!--    } catch (e) {-->
+<!--        console.error("Ошибка в координатах предприятия:", e);-->
+<!--    }-->
+
+<!--    {% for supplier in suppliers %}-->
+<!--        try {-->
+<!--            let supplierCoords = '{{ supplier[2] }}'.replace(/[()]/g, '').split(',');-->
+<!--            let lat = parseFloat(supplierCoords[0].trim());-->
+<!--            let lon = parseFloat(supplierCoords[1].trim());-->
+
+<!--            if (!isNaN(lat) && !isNaN(lon)) {-->
+<!--                let supplierMarker = L.marker([lat, lon], { icon: supplierIcon }).addTo(map)-->
+<!--                    .bindPopup("<b>{{ supplier[1] }}</b>");-->
+<!--                supplierMarker.name = "{{ supplier[1] }}";-->
+<!--                supplierMarkers.push(supplierMarker);-->
+<!--            }-->
+<!--        } catch (e) {-->
+<!--            console.error("Ошибка координат поставщика:", e);-->
+<!--        }-->
+<!--    {% endfor %}-->
+
+<!--    {% for consumer in consumers %}-->
+<!--        try {-->
+<!--            const conCoords = '{{ consumer[2] }}'.replace(/[()]/g, '').split(',');-->
+<!--            const lat = parseFloat(conCoords[1].trim());-->
+<!--            const lon = parseFloat(conCoords[0].trim());-->
+
+<!--            if (!isNaN(lat) && !isNaN(lon)) {-->
+<!--                const consumerMarker = L.marker([lat, lon], { icon: consumerIcon }).addTo(map)-->
+<!--                    .bindPopup("<b>{{ consumer[1] }}</b>");-->
+<!--                consumerMarker.name = "{{ consumer[1] }}";-->
+<!--                consumerMarkers.push(consumerMarker);-->
+<!--            }-->
+<!--        } catch (e) {-->
+<!--            console.error("Ошибка координат потребителя:", e);-->
+<!--        }-->
+<!--    {% endfor %}-->
+
+<!--    drawRoutesAndRecalculate(true); // Рисуем маршруты от текущего маркера (предприятия)-->
+<!--    map.on('dblclick', e => {-->
+<!--        const newMarker = L.marker([e.latlng.lat, e.latlng.lng]).addTo(map)-->
+<!--            .bindPopup(`<b>Новая точка №${newMarkers.length + 1}</b>`).openPopup();-->
+<!--        newMarkers.push(newMarker);-->
+<!--        drawRoutesAndRecalculate(false, newMarker); // Рисуем маршруты от нового маркера-->
+<!--    });-->
+<!--}-->
+
+<!--function drawRoutesAndRecalculate(isEnterprise, marker = null) {-->
+<!--    // Если это новый маркер, рисуем новые маршруты-->
+<!--    if (!isEnterprise && marker) {-->
+<!--        const coordsStr = `${marker.getLatLng().lng.toFixed(6)},${marker.getLatLng().lat.toFixed(6)}`;-->
+<!--        const result = calculateRoutes(marker);-->
+<!--        addToTable(`Новая точка №${newMarkers.length}`, coordsStr, result.tariff, result.distance, false, marker.getLatLng());-->
+
+<!--        // Добавляем маршруты от нового маркера-->
+<!--        supplierMarkers.forEach(supplierMarker => {-->
+<!--            const dist = marker.getLatLng().distanceTo(supplierMarker.getLatLng()) / 1000;-->
+<!--            addToTable(`Поставщик - ${supplierMarker.name}`, supplierMarker.getLatLng().toString(), result.tariff, dist.toFixed(2), false);-->
+<!--            drawRoute(marker, supplierMarker, 'green');-->
+<!--        });-->
+
+<!--        consumerMarkers.forEach(consumerMarker => {-->
+<!--            const dist = marker.getLatLng().distanceTo(consumerMarker.getLatLng()) / 1000;-->
+<!--            addToTable(`Предприятие - Потребитель ${consumerMarker.name}`, consumerMarker.getLatLng().toString(), result.tariff, dist.toFixed(2), false);-->
+<!--            drawRoute(marker, consumerMarker, 'blue');-->
+<!--        });-->
+<!--    } else if (isEnterprise && enterpriseMarker) {-->
+<!--        const result = calculateRoutes(enterpriseMarker);-->
+<!--        addToTable("Текущее местоположение", '{{ enterprise[2] }}', result.tariff, result.distance, true);-->
+
+<!--        // Добавляем маршруты от текущего маркера-->
+<!--        supplierMarkers.forEach(supplierMarker => {-->
+<!--            const dist = enterpriseMarker.getLatLng().distanceTo(supplierMarker.getLatLng()) / 1000;-->
+<!--            addToTable(`Поставщик - ${supplierMarker.name}`, supplierMarker.getLatLng().toString(), result.tariff, dist.toFixed(2), true);-->
+<!--            drawRoute(enterpriseMarker, supplierMarker, 'green');-->
+<!--        });-->
+
+<!--        consumerMarkers.forEach(consumerMarker => {-->
+<!--            const dist = enterpriseMarker.getLatLng().distanceTo(consumerMarker.getLatLng()) / 1000;-->
+<!--            addToTable(`Предприятие - Потребитель ${consumerMarker.name}`, consumerMarker.getLatLng().toString(), result.tariff, dist.toFixed(2), true);-->
+<!--            drawRoute(enterpriseMarker, consumerMarker, 'blue');-->
+<!--        });-->
+<!--    }-->
+<!--}-->
+
+<!--function drawRoute(fromMarker, toMarker, color) {-->
+<!--    const ctrl = L.Routing.control({-->
+<!--        waypoints: [fromMarker.getLatLng(), toMarker.getLatLng()],-->
+<!--        lineOptions: { styles: [{ color: color, weight: 4 }] },-->
+<!--        createMarker: () => null,-->
+<!--        routeWhileDragging: false,-->
+<!--        addWaypoints: false-->
+<!--    }).addTo(map);-->
+<!--    routeControls.push(ctrl);-->
+<!--}-->
+
+<!--function calculateRoutes(baseMarker) {-->
+<!--    let totalSupplierDistance = 0;-->
+<!--    let totalConsumerDistance = 0;-->
+
+<!--    supplierMarkers.forEach(marker => {-->
+<!--        const dist = baseMarker.getLatLng().distanceTo(marker.getLatLng()) / 1000;-->
+<!--        totalSupplierDistance += dist;-->
+<!--    });-->
+
+<!--    consumerMarkers.forEach(marker => {-->
+<!--        const dist = baseMarker.getLatLng().distanceTo(marker.getLatLng()) / 1000;-->
+<!--        totalConsumerDistance += dist;-->
+<!--    });-->
+
+<!--    const supplierTariff = totalSupplierDistance * 25.8;-->
+<!--    const consumerTariff = totalConsumerDistance * 6.27;-->
+<!--    const totalDistance = (totalSupplierDistance + totalConsumerDistance).toFixed(2);-->
+<!--    const totalTariff = (supplierTariff + consumerTariff).toFixed(2);-->
+
+<!--    return {-->
+<!--        tariff: totalTariff,-->
+<!--        distance: totalDistance-->
+<!--    };-->
+<!--}-->
+
+<!--function addToTable(label, coords, tariff, distance, isCurrent, latlng = null) {-->
+<!--    const tableBody = document.querySelector('#location-table tbody');-->
+<!--    const row = document.createElement('tr');-->
+<!--    const rowId = `profitability-${Math.random().toString(36).substring(2, 8)}`;-->
+
+<!--    row.innerHTML = `-->
+<!--        <td></td>-->
+<!--        <td>${coords}</td>-->
+<!--        <td id="${rowId}">...</td>-->
+<!--        <td>${distance} км</td>-->
+<!--        <td>${tariff} руб</td>-->
+<!--        <td>${label}</td>-->
+<!--        <td><button class="btn btn-info">${isCurrent ? 'Да' : 'Нет'}</button></td>-->
+<!--    `;-->
+<!--    tableBody.appendChild(row);-->
+
+<!--    recalculateProfitability(tariff, rowId, latlng);-->
+<!--}-->
+
+<!--function recalculateProfitability(tariff, elementId, latlng = null) {-->
+<!--    fetch('/recalculate-profitability', {-->
+<!--        method: 'POST',-->
+<!--        headers: { 'Content-Type': 'application/json' },-->
+<!--        body: JSON.stringify({-->
+<!--            enterprise_id: {{ enterprise[0] }},-->
+<!--            tariff: tariff,-->
+<!--            lat: latlng?.lat ?? null,-->
+<!--            lng: latlng?.lng ?? null-->
+<!--        })-->
+<!--    })-->
+<!--    .then(res => res.json())-->
+<!--    .then(data => {-->
+<!--        const cell = document.getElementById(elementId);-->
+<!--        if (data.profitability !== undefined) {-->
+<!--            cell.innerText = `${data.profitability.toFixed(2)}%`;-->
+<!--        } else {-->
+<!--            cell.innerText = 'Ошибка';-->
+<!--        }-->
+<!--    })-->
+<!--    .catch(err => {-->
+<!--        console.error("Ошибка при расчете рентабельности:", err);-->
+<!--        document.getElementById(elementId).innerText = 'Ошибка';-->
+<!--    });-->
+<!--}-->
+
+<!--document.addEventListener('DOMContentLoaded', () => {-->
+<!--    showTab('location');-->
+<!--});-->
+
+<!--</script>-->
+<!--<script>-->
+<!--let map = null;-->
+<!--let enterpriseMarker = null;-->
+<!--let newMarkers = [];-->
+<!--let supplierMarkers = [];-->
+<!--let consumerMarkers = [];-->
+<!--let routeControl = null;-->
+
+<!--const supplierIcon = L.divIcon({ html: '<div style="width: 20px; height: 20px; background-color: green;"></div>' });-->
+<!--const consumerIcon = L.divIcon({ html: '<div style="width: 20px; height: 20px; background-color: blue; border-radius: 50%;"></div>' });-->
+
+<!--function showTab(tabName) {-->
+<!--    document.querySelectorAll('.tab-content').forEach(tab => tab.style.display = 'none');-->
+<!--    const currentTab = document.getElementById(tabName);-->
+<!--    if (currentTab) currentTab.style.display = 'block';-->
+<!--    if (tabName === 'location' && map === null) initMap();-->
+<!--}-->
+
+<!--function initMap() {-->
+<!--    map = L.map('map').setView([62.0, 33.0], 7);-->
+<!--    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);-->
+
+<!--    try {-->
+<!--        const coords = '{{ enterprise[2] }}'.replace(/[()]/g, '').split(',');-->
+<!--        const lat = parseFloat(coords[1].trim());-->
+<!--        const lon = parseFloat(coords[0].trim());-->
+
+<!--        if (!isNaN(lat) && !isNaN(lon)) {-->
+<!--            enterpriseMarker = L.marker([lat, lon], { draggable: false }).addTo(map)-->
+<!--                .bindPopup(`<b>{{ enterprise[1] }}</b>`).openPopup();-->
+<!--        }-->
+<!--    } catch (e) {-->
+<!--        console.error("Ошибка в координатах предприятия:", e);-->
+<!--    }-->
+
+<!--    {% for supplier in suppliers %}-->
+<!--        try {-->
+<!--            let supplierCoords = '{{ supplier[2] }}'.replace(/[()]/g, '').split(',');-->
+<!--            let lat = parseFloat(supplierCoords[0].trim());-->
+<!--            let lon = parseFloat(supplierCoords[1].trim());-->
+
+<!--            if (!isNaN(lat) && !isNaN(lon)) {-->
+<!--                let supplierMarker = L.marker([lat, lon], { icon: supplierIcon }).addTo(map)-->
+<!--                    .bindPopup("<b>{{ supplier[1] }}</b>");-->
+<!--                supplierMarkers.push(supplierMarker);-->
+<!--            }-->
+<!--        } catch (e) {-->
+<!--            console.error("Ошибка координат поставщика:", e);-->
+<!--        }-->
+<!--    {% endfor %}-->
+
+<!--    {% for consumer in consumers %}-->
+<!--        try {-->
+<!--            const conCoords = '{{ consumer[2] }}'.replace(/[()]/g, '').split(',');-->
+<!--            const lat = parseFloat(conCoords[1].trim());-->
+<!--            const lon = parseFloat(conCoords[0].trim());-->
+
+<!--            if (!isNaN(lat) && !isNaN(lon)) {-->
+<!--                const consumerMarker = L.marker([lat, lon], { icon: consumerIcon }).addTo(map)-->
+<!--                    .bindPopup("<b>{{ consumer[1] }}</b>");-->
+<!--                consumerMarkers.push(consumerMarker);-->
+<!--            }-->
+<!--        } catch (e) {-->
+<!--            console.error("Ошибка координат потребителя:", e);-->
+<!--        }-->
+<!--    {% endfor %}-->
+
+<!--    map.on('dblclick', e => {-->
+<!--        const newMarker = L.marker([e.latlng.lat, e.latlng.lng]).addTo(map)-->
+<!--            .bindPopup(`<b>Новая точка №${newMarkers.length + 1}</b>`).openPopup();-->
+<!--        newMarkers.push(newMarker);-->
+<!--        drawRoutesAndRecalculate();-->
+<!--    });-->
+
+<!--    drawRoutesAndRecalculate();-->
+<!--}-->
+
+<!--function drawRoutesAndRecalculate() {-->
+<!--    if (routeControl) {-->
+<!--        map.removeControl(routeControl);-->
+<!--    }-->
+
+<!--    const allRoutes = [];-->
+
+<!--    // Основное текущее предприятие-->
+<!--    if (enterpriseMarker) {-->
+<!--        const result = calculateRoutes(enterpriseMarker);-->
+<!--        addToTable("Текущее местоположение", '{{ enterprise[2] }}', result.tariff, result.distance, true);-->
+<!--        allRoutes.push(...result.routes);-->
+<!--    }-->
+
+<!--    // Новые точки-->
+<!--    newMarkers.forEach((marker, idx) => {-->
+<!--        const result = calculateRoutes(marker);-->
+<!--        const coordsStr = marker.getLatLng().lng.toFixed(6) + ',' + marker.getLatLng().lat.toFixed(6);-->
+<!--        addToTable(`Новая точка №${idx + 1}`, coordsStr, result.tariff, result.distance, false, marker.getLatLng());-->
+<!--        allRoutes.push(...result.routes);-->
+<!--    });-->
+
+<!--    // Отрисовка маршрутов-->
+<!--    routeControl = L.Routing.control({-->
+<!--        waypoints: allRoutes,-->
+<!--        createMarker: () => null,-->
+<!--        routeWhileDragging: false-->
+<!--    }).addTo(map);-->
+<!--}-->
+
+<!--// Рассчитать расстояние и тариф от точки до всех поставщиков и потребителей-->
+<!--function calculateRoutes(baseMarker) {-->
+<!--    let totalSupplierDistance = 0;-->
+<!--    let totalConsumerDistance = 0;-->
+<!--    let routes = [];-->
+
+<!--    supplierMarkers.forEach(marker => {-->
+<!--        totalSupplierDistance += baseMarker.getLatLng().distanceTo(marker.getLatLng()) / 1000;-->
+<!--        routes.push(baseMarker.getLatLng(), marker.getLatLng());-->
+<!--    });-->
+
+<!--    consumerMarkers.forEach(marker => {-->
+<!--        totalConsumerDistance += baseMarker.getLatLng().distanceTo(marker.getLatLng()) / 1000;-->
+<!--        routes.push(baseMarker.getLatLng(), marker.getLatLng());-->
+<!--    });-->
+
+<!--    const supplierTariff = totalSupplierDistance * 20;-->
+<!--    const consumerTariff = totalConsumerDistance * 10;-->
+<!--    const totalDistance = (totalSupplierDistance + totalConsumerDistance).toFixed(2);-->
+<!--    const totalTariff = (supplierTariff + consumerTariff).toFixed(2);-->
+
+<!--    return {-->
+<!--        tariff: totalTariff,-->
+<!--        distance: totalDistance,-->
+<!--        routes: routes-->
+<!--    };-->
+<!--}-->
+
+<!--// Добавить строку в таблицу и отправить тариф на сервер-->
+<!--function addToTable(label, coords, tariff, distance, isCurrent, latlng = null) {-->
+<!--    const tableBody = document.querySelector('#location-table tbody');-->
+
+<!--    const row = document.createElement('tr');-->
+<!--    const rowId = `profitability-${Math.random().toString(36).substring(2, 8)}`;-->
+
+<!--    row.innerHTML = `-->
+<!--        <td></td>-->
+<!--        <td>${coords}</td>-->
+<!--        <td id="${rowId}">...</td>-->
+<!--        <td>${distance} км</td>-->
+<!--        <td>${tariff} руб</td>-->
+<!--        <td>${label}</td>-->
+<!--        <td><button class="btn btn-info">${isCurrent ? 'Да' : 'Нет'}</button></td>-->
+<!--    `;-->
+<!--    tableBody.appendChild(row);-->
+
+<!--    recalculateProfitability(tariff, rowId, latlng);-->
+<!--}-->
+
+<!--// Запрос на сервер-->
+<!--function recalculateProfitability(tariff, elementId, latlng = null) {-->
+<!--    fetch('/recalculate-profitability', {-->
+<!--        method: 'POST',-->
+<!--        headers: { 'Content-Type': 'application/json' },-->
+<!--        body: JSON.stringify({-->
+<!--            enterprise_id: {{ enterprise[0] }},-->
+<!--            tariff: tariff,-->
+<!--            lat: latlng?.lat ?? null,-->
+<!--            lng: latlng?.lng ?? null-->
+<!--        })-->
+<!--    })-->
+<!--    .then(res => res.json())-->
+<!--    .then(data => {-->
+<!--        const cell = document.getElementById(elementId);-->
+<!--        if (data.profitability !== undefined) {-->
+<!--            cell.innerText = `${data.profitability.toFixed(2)}%`;-->
+<!--        } else {-->
+<!--            cell.innerText = 'Ошибка';-->
+<!--        }-->
+<!--    })-->
+<!--    .catch(err => {-->
+<!--        console.error("Ошибка при расчете рентабельности:", err);-->
+<!--        document.getElementById(elementId).innerText = 'Ошибка';-->
+<!--    });-->
+<!--}-->
+
+<!--document.addEventListener('DOMContentLoaded', () => {-->
+<!--    showTab('location');-->
+<!--});-->
+<!--</script>-->
+
+
+
+<div id="production" class="tab-content">
+    <h2>Продукция</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Наименование</th>
+                <th>Объем производства (м³)</th>
+                <th>Цена реализации (руб.)</th>
+                <th>Действие</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for product in production_data %}
+            <tr>
+                <td>{{ product[0] }}</td>
+                <td>{{ product[1] }}</td>
+                <td>{{ product[2] }}</td>
+                <td>
+                    <button class="edit-btn">Редактировать</button>
+                    <button class="delete-btn">Удалить</button>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!--<div id="production" class="tab-content">-->
+<!--    <h2>Продукция</h2>-->
+<!--    <table>-->
+<!--        <thead>-->
+<!--            <tr>-->
+<!--                <th>Наименование</th>-->
+<!--                <th>Объем производства (м³)</th>-->
+<!--                <th>Цена реализации (руб.)</th>-->
+<!--                <th>Действие</th>-->
+<!--            </tr>-->
+<!--        </thead>-->
+<!--        <tbody>-->
+<!--            {% for product in products %}-->
+<!--            <tr>-->
+<!--                <td>{{ product[0] }}</td>-->
+<!--                <td>{{ product[1] }}</td>-->
+<!--                <td>{{ product[2] }}</td>-->
+<!--                <td>-->
+<!--                    <button class="edit-btn">Редактировать</button>-->
+<!--                    <button class="delete-btn">Удалить</button>-->
+<!--                </td>-->
+<!--            </tr>-->
+<!--            {% endfor %}-->
+<!--        </tbody>-->
+<!--    </table>-->
+<!--</div>-->
+
+<div id="equipment" class="tab-content">
+    <h2>Оборудование</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Наименование</th>
+                <th>Объем работ (м³)</th>
+                <th>Стоимость использования (руб.)</th>
+                <th>Действие</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in equipment %}
+            <tr>
+                <td>{{ item[0] }}</td>
+                <td>{{ item[1] }}</td>
+                <td>{{ item[2] }}</td>
+                <td>
+                    <button class="edit-btn">Редактировать</button>
+                    <button class="delete-btn">Удалить</button>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div id="labor_resources" class="tab-content">
+    <h2>Трудовые ресурсы</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Наименование ресурса</th>
+                <th>Количество (тарифная ставка)</th>
+                <th>Действие</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for resource in labor_resources %}
+            <tr>
+                <td>{{ resource[0] }}</td>
+                <td>{{ resource[1] }}</td>
+                <td>
+                    <button class="edit-btn">Редактировать</button>
+                    <button class="delete-btn">Удалить</button>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div id="consumers" class="tab-content">
+    <h2>Потребители продукции</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Наименование</th>
+                <th>Тип продукции</th>
+                <th>Цена закупки (руб.)</th>
+                <th>Действие</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for consumer in consumers %}
+            <tr>
+                <td>{{ consumer[0] }}</td>
+                <td>{{ consumer[1] }}</td>
+                <td>{{ consumer[2] }}</td>
+                <td>
+                    <button class="edit-btn">Редактировать</button>
+                    <button class="delete-btn">Удалить</button>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+<div class="tab-content" id="balance" style="display: none;">
+    <h2>Баланс предприятия</h2>
+
+<h3>Баланс сырья</h3>
+<table>
+    <tr><th>Продукт</th><th>Требуется</th><th>Поставлено</th><th>Баланс</th></tr>
+    {% for name, required, supplied, status in raw_material_balance %}
+    <tr>
+        <td>{{ name }}</td>
+        <td>{{ required }}</td>
+        <td>{{ supplied }}</td>
+        <td>{{ status }}</td>
+    </tr>
+    {% endfor %}
+</table>
+
+<h3>Баланс продукции</h3>
+<table>
+    <tr><th>Продукт</th><th>Произведено</th><th>Поставлено</th><th>Баланс</th></tr>
+    {% for name, produced, delivered, status in product_balance %}
+    <tr>
+        <td>{{ name }}</td>
+        <td>{{ produced }}</td>
+        <td>{{ delivered }}</td>
+        <td>{{ status }}</td>
+    </tr>
+    {% endfor %}
+</table>
+</div>
+<script>
+    function fetchBalance() {
+        fetch("/get_balance", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ enterprise_id: {{ enterprise[0] }} })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                alert("Ошибка: " + data.error);
+                return;
+            }
+
+            let rawTable = document.getElementById("raw-material-balance");
+            let productTable = document.getElementById("product-balance");
+
+            rawTable.innerHTML = "<tr><th>Сырьё</th><th>Необходимо</th><th>Поставлено</th><th>Разница</th></tr>";
+            productTable.innerHTML = "<tr><th>Продукт</th><th>Произведено</th><th>Доставлено</th><th>Разница</th></tr>";
+
+            data.raw_material.forEach(row => {
+                let statusClass = row[3] === "✓" ? "status-ok" : (row[3].startsWith("+") ? "status-warning" : "status-danger");
+                rawTable.innerHTML += `<tr><td>${row[0]}</td><td>${row[1]}</td><td>${row[2]}</td><td class="${statusClass}">${row[3]}</td></tr>`;
+            });
+
+            data.product.forEach(row => {
+                let statusClass = row[3] === "✓" ? "status-ok" : (row[3].startsWith("+") ? "status-warning" : "status-danger");
+                productTable.innerHTML += `<tr><td>${row[0]}</td><td>${row[1]}</td><td>${row[2]}</td><td class="${statusClass}">${row[3]}</td></tr>`;
+            });
+        })
+        .catch(error => console.error("Ошибка запроса:", error));
+    }
+
+    // Автоматический вызов при открытии вкладки
+    function showTab(tabId) {
+        document.querySelectorAll('.tab-content').forEach(tab => tab.style.display = 'none');
+        document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+        document.getElementById(tabId).style.display = 'block';
+        document.querySelector(`.tab[onclick="showTab('${tabId}')"]`).classList.add('active');
+
+        if (tabId === 'balance') {
+            fetchBalance();
+        }
+    }
+</script>
+
+<div class="tab-content" id="profitabilitys">
+    <h2>Расчет рентабельности производства</h2>
+    <form id="profitability-form">
+        <div class="form-group">
+            <label for="property-tax-rate-input">Ставка налога на имущество:</label>
+            <input type="text" class="form-control" id="property-tax-rate-input" name="property_tax_rate" value="{{ property_tax_rate }}">
+        </div>
+        <div class="form-group">
+            <label for="profit-tax-rate-input">Ставка налога на прибыль:</label>
+            <input type="text" class="form-control" id="profit-tax-rate-input" name="profit_tax_rate" value="{{ profit_tax_rate }}">
+        </div>
+        <div class="form-group">
+            <label for="social-tax-rate-input">Ставка социального налога:</label>
+            <input type="text" class="form-control" id="social-tax-rate-input" name="social_tax_rate" value="{{ social_tax_rate }}">
+        </div>
+        <button type="submit" class="btn btn-primary">Рассчитать рентабельность</button>
+    </form>
+
+    <div id="results" class="d-none">
+        <h3>Результаты расчета:</h3>
+        <table class="table table-striped">
+            <tr><th>Показатель</th><th>Значение</th></tr>
+            <tr><td>Стоимость основных фондов</td><td id="fixed-assets-cost">{{ total_fixed_assets }}</td></tr>
+            <tr><td>Оборотный капитал</td><td id="current-assets-cost">{{ total_current_assets }}</td></tr>
+            <tr><td>Выручка</td><td id="total-revenue">{{ total_revenue }}</td></tr>
+            <tr><td>Себестоимость продукции</td><td id="total-costs">{{ total_costs }}</td></tr>
+            <tr><td>Налогооблагаемая прибыль</td><td id="taxable-profit">{{ taxable_profit }}</td></tr>
+            <tr><td>Рентабельность производства</td><td id="profitability">{{ profitability }}%</td></tr>
+        </table>
+        <details class="accordion" id="formulas-accordion">
+            <summary class="accordion-header">
+                <span class="accordion-icon"></span>
+                Формулы расчета
+            </summary>
+            <div class="accordion-body">
+                <p>1. Рентабельность производства = (Прибыль налогооблагаемая / (Стоимость основных фондов + Стоимость оборотных средств)) * 100</p>
+                <p>2. Прибыль налогооблагаемая = Прибыль от реализации продукции - (Стоимость основных фондов * Ставка налога на имущество)</p>
+                <p>3. Прибыль от реализации продукции = Выручка - Себестоимость продукции</p>
+                <p>4. Выручка = Объем производства * Цена закупки продукции потребителем</p>
+                <p>5. Стоимость основных фондов (по оборудованию и транспорту) = Стоимость * Количество</p>
+                <p>6. Стоимость оборотных средств = Себестоимость продукции + Запас</p>
+                <p>7. Запас = (Себестоимость продукции * Календарное число дней) / Норма запаса</p>
+                <p>8. Себестоимость продукции = Материальные расходы + Расходы на оплату труда + Суммы начисленной амортизации + Прочие расходы</p>
+                <p>9. Расходы на оплату труда = Тарифная ставка * Количество рабочих</p>
+
+                <p>10. Суммы начисленной амортизации (по оборудованию и транспорту) = Амортизационные отчисления * Количество</p>
+                <p>11. Материальные расходы = (Лесные подати + Арендная плата или Стоимость источников сырья) + Затраты на горюче-смазочные материалы (по оборудованию и транспорту) + Стоимость энергетических ресурсов</p>
+                <p>12. Затраты на горюче-смазочные материалы (по оборудованию и транспорту) = Объём работ * Норма расхода * Цена на горюче-смазочные материалы</p>
+                <p>13. Сумма налогов = (Стоимость основных фондов * Ставка налога на имущество) + (Прибыль налогооблагаемая * Ставка налога на прибыль) + (Расходы на оплату труда * Единый социальный налог)</p>
+            </div>
+        </details>
+    </div>
+</div>
+
+<script>
+    $(document).ready(function() {
+        $(".tab-button").click(function() {
+            $(".tab-button").removeClass("active");
+            $(this).addClass("active");
+            $(".tab-content").hide();
+            $("#" + $(this).data("tab")).show();
+        });
+
+        $("#profitability-form").submit(async function(event) {
+            event.preventDefault();
+            const formData = $(this).serialize();
+
+            try {
+                const response = await fetch('/calculate-profitability', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+
+                $("#fixed-assets-cost").text(data.total_fixed_assets.toFixed(2));
+                $("#current-assets-cost").text(data.total_current_assets.toFixed(2));
+                $("#total-revenue").text(data.total_revenue.toFixed(2));
+                $("#total-costs").text(data.total_costs.toFixed(2));
+                $("#taxable-profit").text(data.taxable_profit.toFixed(2));
+                $("#iprofitability").text((data.profitability * 100).toFixed(2) + "%");
+
+                $("#results").removeClass("d-none");
+            } catch (error) {
+                console.error("Error:", error);
+            }
+        });
+
+        // Получаем все элементы details
+        const details = document.querySelectorAll('details');
+
+        // Проходимся по каждому элементу
+        details.forEach(item => {
+
+            // На каждый элемент вешаем слушатель события клика
+            item.addEventListener('click', (e) => {
+
+                // Сбрасываем стандартное действие при клике
+                e.preventDefault();
+
+                // Находим открытый элемент
+                const openItem = document.querySelector('details[open]');
+
+                // Если есть открытый элемент удаляем ему атрибут open
+                if (openItem) openItem.open = false;
+
+                // Если открытый элемент не является тем, на который мы нажали, то нажатому элементу добавляем атрибут open
+                if (openItem !== item) item.open = true;
+
+                // Добавляем/убираем класс для поворота стрелочки
+                item.querySelector('.accordion-icon').classList.toggle('rotate');
+            });
+        });
+    });
+</script>
+
+<style>
+    .accordion-icon {
+        display: inline-block;
+        width: 0;
+        height: 0;
+        border-top: 6px solid transparent;
+        border-right: 8px solid #333;
+        border-bottom: 6px solid transparent;
+        transition: transform 0.3s;
+    }
+
+    .accordion-icon.rotate {
+        transform: rotate(90deg);
+    }
+</style>
+</body>
+<script>
+function showTab(tabName) {
+    document.querySelectorAll('.tab-content').forEach(function(tabContent) {
+        tabContent.style.display = 'none';
+    });
+
+    document.querySelectorAll('.tab').forEach(function(tab) {
+        tab.classList.remove('active');
+    });
+
+    var currentTab = document.getElementById(tabName);
+    if (currentTab) {
+        currentTab.style.display = 'block';
+    }
+
+    var tabs = document.querySelectorAll('.tabs .tab');
+    tabs.forEach(function(tab) {
+        if (tab.getAttribute('onclick').includes(tabName)) {
+            tab.classList.add('active');
+        }
+    });
+
+    // Логика для специальных вкладок
+    if (tabName === 'location') {
+        if (map === null) {  // Инициализируем карту только один раз
+            initMap();
+        }
+    } else if (tabName === 'balance') {
+        fetchBalance();
+    }
+
+}
+
+</script>
+</html>

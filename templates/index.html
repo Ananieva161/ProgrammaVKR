@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Информационная система поддержки принятия решений</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css" />
+    <link rel="stylesheet" href="templates/css/style.css" />
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f0f5f3;
+            color: #2c5b4b;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+
+        header {
+            background-color: #6dbd9e;
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+
+        nav ul {
+            list-style-type: none;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+        }
+
+        nav li {
+            margin: 0 15px;
+        }
+
+        nav a {
+            color: white;
+            text-decoration: none;
+            font-size: 22px;
+        }
+
+        main {
+            padding: 20px;
+            flex-grow: 1;
+        }
+
+        .system-info {
+            margin-top: 20px;
+            padding: 20px;
+            background-color: #e0f0eb;
+            border-radius: 8px;
+            font-size: 20px;
+            color: #2c5b4b;
+        }
+
+        .footer {
+            background-color: #2E8B57;
+            color: white;
+            padding: 20px;
+            width: 100%;
+            text-align: center;
+        }
+
+        .footer-table {
+            width: 100%;
+            margin: 0 auto;
+            border-collapse: collapse;
+        }
+
+        .footer-table td {
+            padding: 15px;
+            vertical-align: top;
+            width: 25%;
+        }
+
+        .footer .widget_title h4 {
+            color: #ffffff;
+            margin-bottom: 10px;
+            font-size: 20px;
+        }
+
+        .footer .widget_content p,
+        .footer .links li {
+            color: #e0e0e0;
+            font-size: 16px;
+        }
+
+        .footer a {
+            color: #ffffff;
+            text-decoration: none;
+        }
+
+        .footer a:hover {
+            text-decoration: underline;
+        }
+
+        .footer_bottom {
+            background: #246a43;
+            color: #ffffff;
+            padding: 10px 0;
+            text-align: center;
+        }
+
+        .thumbnail {
+            width: 100px;
+            height: auto;
+            max-width: 100%;
+            border-radius: 10px;
+        }
+
+        .contact-details-alt {
+            list-style-type: none;
+            padding: 0;
+            font-size: 16px;
+        }
+        .menu-item {
+        font-size: 22px; /* Увеличьте размер шрифта здесь */
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Информационная система поддержки принятия решений в сфере развития лесного комплекса</h1>
+        <nav>
+            <ul>
+<!--                <li><a href="index21">Предприятия</a></li>-->
+                <li><a href="index22">Предприятия</a></li>
+                <li><a href="Spravka">Справочники</a></li>
+<!--                <li><a href="Spravka1">Справочники1</a></li>-->
+                <li><a href="map">Карта предприятий</a></li>
+<!--                <li><a href="rout">Предприятия и маршруты</a></li>-->
+<!--                <li><a href="balans">Баланс</a></li>-->
+                <li><a href="supmap">Информация о Поставщиках</a></li>
+            </ul>
+        </nav>
+    </header>
+
+    <main>
+        <h1>Добро пожаловать в систему поддержки принятия решения!</h1>
+
+        <div class="system-info">
+            <h2>О системе</h2>
+            <p>Система поддержки принятия решения по переработке лесных ресурсов в Карелии позволяет эффективно организовывать информацию о предпритиях лесного комплекса, включая их детали, ассортимент продукции и производственные показатели. Обеспечивает аналитику и поддержку пользователей для повышения эффективности работы.</p>
+        </div>
+    </main>
+
+    <footer class="footer">
+        <div class="container">
+            <table class="footer-table">
+                <tr>
+                    <td>
+                        <div class="widget_title">
+                            <h4><span>Полезные ссылки</span></h4>
+                        </div>
+                        <div class="widget_content">
+                            <ul class="links">
+                                <li><a href="https://petrsu.ru" target="_blank">Петрозаводский государственный университет (ПетрГУ)</a></li>
+                                <li><a href="https://edu.petrsu.ru" target="_blank">Образовательный портал ПетрГУ</a></li>
+                            </ul>
+                        </div>
+                    </td>
+                    <td>
+                        <div class="widget_title">
+                            <h4><span>Сопровождение</span></h4>
+                        </div>
+                        <div class="widget_content">
+                            <p>Отдел электронных образовательных ресурсов ПетрГУ</p>
+                            <ul class="contact-details-alt">
+                                <li><strong>Адрес:</strong> ГК ПетрГУ, 264а каб.</li>
+                                <li><strong>Телефон:</strong> (814-2) 71-10-64, 78-14-81</li>
+                                <li><strong>E-mail:</strong> <a href="mailto:admin-portal@petrsu.ru">admin-portal@petrsu.ru</a></li>
+                            </ul>
+                        </div>
+                    </td>
+                    <td>
+                        <div class="widget_title">
+                            <h4><span>Техническая поддержка</span></h4>
+                        </div>
+                        <div class="widget_content">
+                            <p>ПетрГУ</p>
+                            <ul class="contact-details-alt">
+                                <li><strong>Адрес:</strong> 185910, Россия, Республика Карелия,  г. Петрозаводск, пр. Ленина, 33</li>
+                                <li><strong>Телефон:</strong> (814-2) 71-10-29</li>
+                                <li><strong>E-mail:</strong> <a href="mailto:vgurt@psu.karelia.ru">vgurt@psu.karelia.ru</a></li>
+                            </ul>
+                        </div>
+                    </td>
+                </tr>
+            </table>
+        </div>
+    </footer>
+
+    <section class="footer_bottom">
+        <div class="container">
+            <p>&copy; 2017 - 2025 <a href="https://petrsu.ru">Петрозаводский государственный университет</a></p>
+            <div class="footer_social">
+                <img src="static/ptrgu.jpg" alt="ПетрГУ" class="thumbnail">
+            </div>
+            <p>Продолжая использовать данный сайт, Вы даете согласие на обработку файлов Cookies и других пользовательских данных, в соответствии с <a target="_blank" href="https://petrsu.ru/legal">Политикой конфиденциальности</a>.</p>
+        </div>
+    </section>
+
+	<script src="/js/jquery-1.10.2.min.js"></script>
+<script src="/assets/a66190e6/js/bootstrap.js"></script>
+<script type="text/javascript" src="/js/jquery.easing.1.3.js" charset="utf-8"></script>
+<script type="text/javascript" src="/js/jquery.cookie.js" charset="utf-8"></script>
+<script type="text/javascript" src="/js/jquery.fractionslider.js" charset="utf-8"></script>
+<script type="text/javascript" src="/js/jquery.smartmenus.min.js" charset="utf-8"></script>
+<script type="text/javascript" src="/js/jquery.smartmenus.bootstrap.min.js" charset="utf-8"></script>
+<script type="text/javascript" src="/js/jquery.jcarousel.js" charset="utf-8"></script>
+<script type="text/javascript" src="/js/jflickrfeed.js" charset="utf-8"></script>
+<script type="text/javascript" src="/js/jquery.magnific-popup.min.js" charset="utf-8"></script>
+<script type="text/javascript" src="/js/jquery.isotope.min.js" charset="utf-8"></script>
+<script type="text/javascript" src="/js/swipe.js" charset="utf-8"></script>
+<script type="text/javascript" src="/js/jquery-scrolltofixed-min.js" charset="utf-8"></script>
+<script type="text/javascript" src="/js/main.js?v=3" charset="utf-8"></script>
+<script src="/assets/8040f019/yii.js"></script>
+<script>jQuery(window).on('load', function () {
+
+    $('.slider').fractionSlider({
+        "slideTransition" :     "none",
+        'fullWidth': 			true,
+        'controls': 			false,
+        'responsive': 		true,
+        'dimensions': 		"1920,450",
+        'increase': 			true,
+        'pauseOnHover': 		false,
+        'slideEndAnimation': 	false,
+        'autoChange':         true
+    });
+
+});</script>
+  <script>
+    import { map, updateRoute } from './map.js';
+
+// Инициализация страницы
+document.addEventListener('DOMContentLoaded', function() {
+    // Другие функции инициализации страницы
+    renderForestResources();
+    renderProducts();
+    renderFinancialData();
+});
+
+// Функция для отображения данных о лесных ресурсах
+function renderForestResources() {
+    // Здесь вы можете написать код для получения и отображения данных о лесных ресурсах
+    // Например, вы можете получить данные с сервера и вставить их в соответствующие элементы HTML
+    var forestResourcesElement = document.getElementById('forestResources');
+    forestResourcesElement.textContent = 'Данные о лесных ресурсах';
+}
+
+// Функция для отображения данных о продукции
+function renderProducts() {
+    // Здесь вы можете написать код для получения и отображения данных о продукции
+    var productsElement = document.getElementById('products');
+// Инициализация карты
+var map = L.map('map').setView([62.5, 34.5], 8);
+
+// Добавление слоя OpenStreetMap
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+}).addTo(map);
+
+// Группа для маркеров
+var markers = L.featureGroup().addTo(map);
+
+// Переменная для хранения объекта маршрута
+var routingControl;
+
+// Обработчик клика на карте для установки маркеров
+map.on('click', function (e) {
+    var marker = L.marker(e.latlng).addTo(markers);
+    marker.bindPopup('Координаты: ' + e.latlng.lat.toFixed(5) + ', ' + e.latlng.lng.toFixed(5));
+
+    updateRoute();
+});
+
+// Функция для обновления маршрута
+function updateRoute() {
+    // Получение массива координат маркеров
+    var markerCoords = markers.getLayers().map(function (marker) {
+        return marker.getLatLng();
+    });
+
+    // Очистка предыдущего маршрута
+    if (routingControl) {
+        map.removeControl(routingControl);
+    }
+
+    // Построение нового маршрута с помощью Leaflet Routing Machine
+    routingControl = L.Routing.control({
+        waypoints: markerCoords,
+        routeWhileDragging: true,
+        showAlternatives: true,
+        altLineOptions: {
+            styles: [
+                { color: 'blue', weight: 4 },
+                { color: 'green', weight: 4 },
+                { color: 'orange', weight: 4 }
+            ]
+        },
+        createMarker: function (i, wp, n) {
+            return L.marker(wp.latLng, {
+                draggable: true,
+                icon: L.divIcon({ className: 'leaflet-marker-icon' })
+            });
+        },
+        routeWhileDragging: true,
+        show: false,
+        collapsible: true,
+        autoRoute: true,
+        itineraryControl: {
+            showSubHeading: true,
+            show: true
+        }
+    }).addTo(map);
+
+    routingControl.on('routesfound', function (e) {
+        var routes = e.routes;
+        var summary = routes[0].summary;
+        var distance = (summary.totalDistance / 1000).toFixed(2); // Расстояние в километрах
+        var condition = 'Хорошее'; // Состояние дороги (можно добавить логику для определения состояния)
+
+        var popup = L.popup()
+            .setLatLng(markerCoords[0])
+            .setContent(`
+                <p>Расстояние: ${distance} км</p>
+                <p>Состояние дороги: ${condition}</p>
+            `);
+        markers.getLayers()[0].bindPopup(popup).openPopup();
+    });
+}
+
+// Функция для удаления маркера
+markers.on('click', function (e) {
+    if (e.layer) {
+        markers.removeLayer(e.layer);
+        updateRoute();
+    }
+});
+
+
+
+  </script>
+</body>
+</html>

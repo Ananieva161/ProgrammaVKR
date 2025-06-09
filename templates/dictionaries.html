@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Справочники</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f0f5f3;
+            color: #2c5b4b;
+        }
+
+        header {
+            background-color: #6dbd9e;
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+
+        nav ul {
+            list-style-type: none;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+        }
+
+        nav li {
+            margin: 0 10px;
+        }
+
+        nav a {
+            color: white;
+            text-decoration: none;
+        }
+
+        main {
+            padding: 20px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+
+        th, td {
+            padding: 8px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+
+        tr:hover {
+            background-color: #e5f2ed;
+        }
+
+        button {
+            background-color: #6dbd9e;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+
+        button:hover {
+            background-color: #54a685;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .table-container {
+            width: 80%;
+            margin-bottom: 20px;
+        }
+
+        .form-container {
+            display: none;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .dropdown-container {
+            margin-bottom: 20px;
+        }
+
+        #map {
+            height: 400px;
+            margin-top: 20px;
+            width: 100%;
+        }
+
+        .btn-add {
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+<header>
+    <nav>
+        <ul>
+            <li><a href="/">Главная</a></li>
+        </ul>
+    </nav>
+</header>
+
+<div class="container mt-5">
+    <h2>Справочники</h2>
+
+    <!-- Выпадающий список для выбора справочника -->
+    <div class="dropdown-container">
+        <select class="form-control" id="select_table">
+            <option value="">Выберите справочник</option>
+            {% for table, table_name in tables.items() %}
+                <option value="{{ table }}">{{ table_name }}</option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <!-- Контейнер для отображения данных выбранного справочника -->
+    <div id="selected_table_data"></div>
+
+    <!-- Кнопка добавления новой записи -->
+    <button class="btn btn-primary btn-add" id="add_record_button" style="display:none;" onclick="openAddForm()">Добавить запись</button>
+
+    <!-- Карта Карелии -->
+    <div id="map"></div>
+</div>
+
+<script>
+    // Инициализация карты Карелии
+    const map = L.map('map').setView([61.786, 34.349], 6);
+
+    // Добавление слоя карты
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    }).addTo(map);
+
+    // Функция для загрузки данных таблицы
+    function loadTableData(table) {
+        $.ajax({
+            url: "/get_table_data",
+            type: "POST",
+            contentType: "application/json",
+            data: JSON.stringify({ table: table }),
+            success: function(response) {
+                let tableHtml = `
+                    <table class="table table-bordered table-striped">
+                        <thead>
+                            <tr>`;
+
+                // Заголовки столбцов
+                response.columns.forEach(function(column) {
+                    tableHtml += `<th>${column}</th>`;
+                });
+
+                tableHtml += `<th>Действия</th></tr></thead><tbody>`;
+
+                // Загрузка строк данных
+                response.rows.forEach(function(row) {
+                    tableHtml += `<tr>`;
+                    row.forEach(function(cell, cellIndex) {
+                        // Исключаем первый столбец (ID)
+                        if (cellIndex !== 0) {
+                            tableHtml += `<td>${cell}</td>`;
+                        }
+                    });
+                    tableHtml += `
+                        <td>
+                            <button class="btn btn-warning" onclick="openEditForm('${table}', ${row[0]})">Редактировать</button>
+                            <button class="btn btn-danger" onclick="deleteRecord('${table}', ${row[0]})">Удалить</button>
+                        </td>
+                    </tr>`;
+                });
+
+                tableHtml += `</tbody></table>`;
+                $('#selected_table_data').html(tableHtml); // Обновляем контейнер с данными
+
+                // Показать кнопку добавления записи
+                $('#add_record_button').show();
+
+                // Проверка на наличие координат и добавление маркеров на карту только для предприятий
+                response.rows.forEach(function(row) {
+                    if (table === "Enterprises") {
+                        const lat = parseFloat(row[1]);  // Предполагается, что координаты находятся во втором и третьем столбцах
+                        const lon = parseFloat(row[2]);
+                        if (!isNaN(lat) && !isNaN(lon)) {
+                            L.marker([lat, lon]).addTo(map)
+                                .bindPopup("Предприятие: " + row[0]) // Используем название предприятия для подписи
+                                .openPopup();
+                        }
+                    }
+                });
+            }
+        });
+    }
+
+    // Обработчик изменения выбранного справочника
+    $('#select_table').change(function() {
+        let selectedTable = $(this).val();
+        if (selectedTable) {
+            loadTableData(selectedTable); // Загружаем данные для выбранной таблицы
+        } else {
+            $('#selected_table_data').html(''); // Очищаем контейнер, если ничего не выбрано
+            $('#add_record_button').hide(); // Скрываем кнопку добавления
+        }
+    });
+
+    // Открытие формы добавления новой записи
+    function openAddForm() {
+        let table = $('#select_table').val();
+        let formHtml = `
+            <h4>Добавить новую запись</h4>
+            <form id="add_form_${table}" onsubmit="addNewRecord('${table}'); return false;">
+        `;
+
+        $.get(`/get_columns_for_table/${table}`, function(response) {
+            response.columns.forEach(function(column) {
+                formHtml += `
+                    <div class="form-group">
+                        <label>${column}</label>
+                        <input type="text" class="form-control" name="${column}" required>
+                    </div>
+                `;
+            });
+
+            formHtml += `
+                <button type="submit" class="btn btn-success">Добавить</button>
+                <button type="button" class="btn btn-danger" onclick="closeForm()">Отмена</button>
+            </form>
+            `;
+
+            $('#selected_table_data').html(formHtml);
+        });
+    }
+
+    // Добавление новой записи
+    function addNewRecord(table) {
+        let formData = $('#add_form_' + table).serialize();
+        $.post("/add_new_record", { table: table, data: formData }, function(response) {
+            if (response.success) {
+                alert('Запись успешно добавлена');
+                loadTableData(table); // Обновляем таблицу после добавления
+            } else {
+                alert('Ошибка при добавлении записи');
+            }
+        });
+    }
+
+    // Закрытие формы редактирования или добавления
+    function closeForm() {
+        $('#selected_table_data').html('');  // Закрываем форму
+    }
+
+</script>
+
+</body>
+</html>
+
+
+

@@ -1,0 +1,432 @@
+
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ enterprise[1] }} - Редактирование</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+<!--    <script src="{{ url_for('static', filename='map.js') }}" defer></script>-->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="11.js"></script>
+    <style>
+        /* Стили страницы */
+        body {
+            font-family: Arial, sans-serif;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+        }
+        .tabs {
+            display: flex;
+            margin: 20px 0;
+        }
+        .tab {
+            padding: 10px 20px;
+            border: 1px solid #ccc;
+            margin-right: 5px;
+            cursor: pointer;
+        }
+        .tab-content {
+            margin-top: 20px;
+        }
+        .map {
+            width: 600px;
+            height: 400px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            padding: 8px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <h1>{{ enterprise[1] }}</h1>
+    <p>Местоположение: {{ enterprise[2] }}</p>
+    <img src="{{ url_for('static', filename='enterprise_logo.png') }}" alt="Логотип" width="100">
+</div>
+
+<!-- Вкладки для каждой категории данных -->
+<div class="tabs">
+    <div class="tab" onclick="showTab('location')">Местоположение</div>
+    <div class="tab" onclick="showTab('production')">Продукция</div>
+    <div class="tab" onclick="showTab('equipment')">Оборудование</div>
+    <div class="tab" onclick="showTab('labor_resources')">Трудовые ресурсы</div>
+<!--    <div class="tab" onclick="showTab('raw_materials')">Источники сырья</div>-->
+<!--    <div class="tab" onclick="showTab('energy_resources')">Энергетические ресурсы</div>-->
+<!--    <div class="tab" onclick="showTab('consumers')">Потребители продукции</div>-->
+<!--    <div class="tab" onclick="showTab('rent')">расчет рентабельности</div>-->
+</div>
+
+
+<div id="location" class="tab-content" style="display:none;">
+    <h2>Местоположение</h2>
+    <div id="map" class="map"></div>
+</div>
+
+<div id="production" class="tab-content" style="display:none;">
+    <h2>Продукция</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Наименование</th>
+                <th>Объем производства (м³)</th>
+                <th>Цена реализации (руб.)</th>
+                <th>Действие</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for product in products %}
+            <tr>
+                <td>{{ product[0] }}</td>
+                <td>{{ product[1] }}</td>
+                <td>{{ product[2] }}</td>
+                <td><button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#editModal-{{ loop.index0 }}">
+                                Редактировать
+                            </button>
+                            <button type="button" class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#deleteModal-{{ loop.index0 }}">
+                                Удалить
+                            </button>
+                                                <!-- Модальное окно редактирования -->
+                            <div class="modal fade" id="editModal-{{ loop.index0 }}" tabindex="-1" aria-labelledby="editModalLabel-{{ loop.index0 }}" aria-hidden="true">
+                                <div class="modal-dialog">
+                                    <div class="modal-content">
+                                        <div class="modal-header">
+                                            <h5 class="modal-title" id="editModalLabel-{{ loop.index0 }}">Редактировать продукт</h5>
+                                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                        </div>
+                                        <div class="modal-body">
+                                            <form action="{{ url_for('edit_product', product_id=loop.index0) }}" method="POST">
+                                                <div class="mb-3">
+                                                           <label for="name-{{ loop.index0 }}" class="form-label">Наименование</label>
+                                                    <input type="text" class="form-control" id="name-{{ loop.index0 }}" name="name" value="{{ product[0] }}">
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label for="volume-{{ loop.index0 }}" class="form-label">Объем производства (м³)</label>
+                                                    <input type="number" class="form-control" id="volume-{{ loop.index0 }}" name="volume" value="{{ product[1] }}">
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label for="price-{{ loop.index0 }}" class="form-label">Цена реализации (руб.)</label>
+                                                    <input type="number" class="form-control" id="price-{{ loop.index0 }}" name="price" value="{{ product[2] }}">
+                                                </div>
+                                                <button type="submit" class="btn btn-primary">Сохранить</button>
+                                            </form>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Модальное окно удаления -->
+                            <div class="modal fade" id="deleteModal-{{ loop.index0 }}" tabindex="-1" aria-labelledby="deleteModalLabel-{{ loop.index0 }}" aria-hidden="true">
+                                <div class="modal-dialog">
+                                    <div class="modal-content">
+                                        <div class="modal-header">
+                                            <h5 class="modal-title" id="deleteModalLabel-{{ loop.index0 }}">Удалить продукт</h5>
+                                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                        </div>
+                                        <div class="modal-body">
+                                            <p>Вы уверены, что хотите удалить этот продукт?</p>
+                                            <form action="{{ url_for('delete_product', product_id=loop.index0) }}" method="POST">
+                                                <button type="submit" class="btn btn-danger">Удалить</button>
+                                            </form>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    <div class="d-flex justify-content-end mt-3">
+    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addProductModal">
+        Добавить
+    </button>
+</div>
+
+<!-- Модальное окно для добавления нового продукта -->
+<div class="modal fade" id="addProductModal" tabindex="-1" aria-labelledby="addProductModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="addProductModalLabel">Добавить новый продукт</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="add-product-form">
+                    <div class="mb-3">
+                        <label for="new-product-name" class="form-label">Название</label>
+                        <input type="text" class="form-control" id="new-product-name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="new-production-volume" class="form-label">Объем производства</label>
+                        <input type="number" class="form-control" id="new-production-volume" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="new-product-price" class="form-label">Цена</label>
+                        <input type="number" class="form-control" id="new-product-price" required>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-primary" id="save-new-product">Сохранить</button>
+            </div>
+        </div>
+    </div>
+</div>
+</div>
+<!-- Оборудование -->
+<div id="equipment" class="tab-content" style="display:none;">
+    <h2>Оборудование</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Наименование</th>
+                <th>Объем работ (м³)</th>
+                <th>Стоимость использования (руб.)</th>
+                <th>Действие</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in equipment %}
+            <tr>
+                <td>{{ item[0] }}</td>
+                <td>{{ item[1] }}</td>
+                <td>{{ item[2] }}</td>
+                <td>
+                    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#editEquipmentModal-{{ loop.index0 }}">
+                        Редактировать
+                    </button>
+                    <button type="button" class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#deleteEquipmentModal-{{ loop.index0 }}">
+                        Удалить
+                    </button>
+                </td>
+            </tr>
+
+            <!-- Модальное окно для редактирования оборудования -->
+            <div class="modal fade" id="editEquipmentModal-{{ loop.index0 }}" tabindex="-1" aria-labelledby="editEquipmentModalLabel-{{ loop.index0 }}" aria-hidden="true">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="editEquipmentModalLabel-{{ loop.index0 }}">Редактировать оборудование</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <form action="{{ url_for('update_equipment', equipment_id=loop.index0) }}" method="POST">
+                                <div class="mb-3">
+                                    <label for="name-{{ loop.index0 }}" class="form-label">Наименование</label>
+                                    <input type="text" class="form-control" id="ename-{{ loop.index0 }}" name="name" value="{{ item[0] }}">
+                                </div>
+                                <div class="mb-3">
+                                    <label for="volume-{{ loop.index0 }}" class="form-label">Объем работ (м³)</label>
+                                    <input type="number" class="form-control" id="evolume-{{ loop.index0 }}" name="volume" value="{{ item[1] }}">
+                                </div>
+                                <div class="mb-3">
+                                    <label for="cost-{{ loop.index0 }}" class="form-label">Стоимость использования (руб.)</label>
+                                    <input type="number" class="form-control" id="cost-{{ loop.index0 }}" name="cost" value="{{ item[2] }}">
+                                </div>
+                                <button type="submit" class="btn btn-primary">Сохранить</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Модальное окно для удаления оборудования -->
+            <div class="modal fade" id="deleteEquipmentModal-{{ loop.index0 }}" tabindex="-1" aria-labelledby="deleteEquipmentModalLabel-{{ loop.index0 }}" aria-hidden="true">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+
+                            <h5 class="modal-title" id="deleteEquipmentModalLabel-{{ loop.index0 }}">Удалить оборудование</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <p>Вы уверены, что хотите удалить это оборудование?</p>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отменить</button>
+                            <a href="{{ url_for('delete_equipment', equipment_id=loop.index0) }}" class="btn btn-danger">Удалить</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <!-- Форма для добавления нового оборудования -->
+    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addEquipmentModal">
+        Добавить оборудование
+    </button>
+
+    <div class="modal fade" id="addEquipmentModal" tabindex="-1" aria-labelledby="addEquipmentModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="addEquipmentModalLabel">Добавить оборудование</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form action="{{ url_for('add_equipment') }}" method="POST">
+                        <div class="mb-3">
+                            <label for="name" class="form-label">Наименование</label>
+                            <input type="text" class="form-control" id="name" name="name" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="volume" class="form-label">Объем работ (м³)</label>
+                            <input type="number" class="form-control" id="volume" name="volume" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="cost" class="form-label">Стоимость использования (руб.)</label>
+                            <input type="number" class="form-control" id="cost" name="cost" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Добавить</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Трудовые ресурсы -->
+<div id="labor_resources" class="tab-content" style="display:none;">
+    <h2>Трудовые ресурсы</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Наименование ресурса</th>
+                <th>Количество</th>
+                <th>Действие</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for resource in labor_resources %}
+            <tr>
+                <td>{{ resource[0] }}</td>
+                <td>{{ resource[1] }}</td>
+                <td>
+                    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#editLaborResourceModal-{{ loop.index0 }}">
+                        Редактировать
+                    </button>
+                    <button type="button" class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#deleteLaborResourceModal-{{ loop.index0 }}">
+                        Удалить
+                    </button>
+                </td>
+            </tr>
+
+            <!-- Модальное окно для редактирования трудовых ресурсов -->
+            <div class="modal fade" id="editLaborResourceModal-{{ loop.index0 }}" tabindex="-1" aria-labelledby="editLaborResourceModalLabel-{{ loop.index0 }}" aria-hidden="true">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="editLaborResourceModalLabel-{{ loop.index0 }}">Редактировать трудовой ресурс</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <form action="{{ url_for('update_labor_resource', resource_id=loop.index0) }}" method="POST">
+                                <div class="mb-3">
+                                    <label for="name-{{ loop.index0 }}" class="form-label">Наименование ресурса</label>
+                                    <input type="text" class="form-control" id="lname-{{ loop.index0 }}" name="name" value="{{ resource[0] }}">
+                                </div>
+                                <div class="mb-3">
+                                    <label for="quantity-{{ loop.index0 }}" class="form-label">Количество</label>
+                                    <input type="number" class="form-control" id="quantity-{{ loop.index0 }}" name="quantity" value="{{ resource[1] }}">
+                                </div>
+                                <button type="submit" class="btn btn-primary">Сохранить</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Модальное окно для удаления трудовых ресурсов -->
+            <div class="modal fade" id="deleteLaborResourceModal-{{ loop.index0 }}" tabindex="-1" aria-labelledby="deleteLaborResourceModalLabel-{{ loop.index0 }}" aria-hidden="true">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="deleteLaborResourceModalLabel-{{ loop.index0 }}">Удалить трудовой ресурс</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <p>Вы уверены, что хотите удалить этот трудовой ресурс?</p>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отменить</button>
+                            <a href="{{ url_for('delete_labor_resource', resource_id=loop.index0) }}" class="btn btn-danger">Удалить</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <!-- Форма для добавления нового трудового ресурса -->
+    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addLaborResourceModal">
+        Добавить трудовой ресурс
+    </button>
+
+    <div class="modal fade" id="addLaborResourceModal" tabindex="-1" aria-labelledby="addLaborResourceModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="addLaborResourceModalLabel">Добавить трудовой ресурс</h5>
+
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form action="{{ url_for('add_labor_resource') }}" method="POST">
+                        <div class="mb-3">
+                            <label for="name" class="form-label">Наименование ресурса</label>
+                            <input type="text" class="form-control" id="lname" name="name" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="quantity" class="form-label">Количество</label>
+                            <input type="number" class="form-control" id="quantity" name="quantity" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Добавить</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!--<script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>-->
+<script>
+    function showTab(tabName) {
+        // Скрываем все вкладки
+        document.querySelectorAll('.tab-content').forEach(tab => {
+            tab.style.display = 'none';
+        });
+        // Показать выбранную вкладку
+        document.getElementById(tabName).style.display = 'block';
+    }
+
+    // Инициализация карты с маркером
+    const map = L.map('map').setView([61.7849, 34.3469], 13);  // Координаты Петрозаводска
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors'
+    }).addTo(map);
+    L.marker([61.7849, 34.3469]).addTo(map).bindPopup("Предприятие").openPopup();
+
+
+</script>
+    <a href="{{ url_for('index') }}">Назад</a>
+</body>
+</html>

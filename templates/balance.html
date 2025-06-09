@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Баланс предприятия</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+        h1, h2 {
+            text-align: center;
+        }
+        .container {
+            width: 80%;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        select {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 20px;
+            font-size: 16px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        th, td {
+            padding: 10px;
+            border: 1px solid #ddd;
+            text-align: center;
+        }
+        th {
+            background-color: #4CAF50;
+            color: white;
+        }
+        .status-ok {
+            color: green;
+            font-weight: bold;
+        }
+        .status-warning {
+            color: orange;
+            font-weight: bold;
+        }
+        .status-danger {
+            color: red;
+            font-weight: bold;
+        }
+    </style>
+    <script>
+        function fetchBalance() {
+            let enterpriseId = document.getElementById("enterprise").value;
+
+            fetch("/get_balance", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ enterprise_id: enterpriseId })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    alert("Ошибка: " + data.error);
+                    return;
+                }
+
+                let rawTable = document.getElementById("raw-material-balance");
+                let productTable = document.getElementById("product-balance");
+
+                rawTable.innerHTML = "<tr><th>Сырьё</th><th>Необходимо</th><th>Поставлено</th><th>Разница</th></tr>";
+                productTable.innerHTML = "<tr><th>Продукт</th><th>Произведено</th><th>Доставлено</th><th>Разница</th></tr>";
+
+                data.raw_material.forEach(row => {
+                    let statusClass = row[3] === "✓" ? "status-ok" : (row[3].startsWith("+") ? "status-warning" : "status-danger");
+                    rawTable.innerHTML += `<tr><td>${row[0]}</td><td>${row[1]}</td><td>${row[2]}</td><td class="${statusClass}">${row[3]}</td></tr>`;
+                });
+
+                data.product.forEach(row => {
+                    let statusClass = row[3] === "✓" ? "status-ok" : (row[3].startsWith("+") ? "status-warning" : "status-danger");
+                    productTable.innerHTML += `<tr><td>${row[0]}</td><td>${row[1]}</td><td>${row[2]}</td><td class="${statusClass}">${row[3]}</td></tr>`;
+                });
+            })
+            .catch(error => console.error("Ошибка запроса:", error));
+        }
+    </script>
+</head>
+<body>
+ <header>
+    <nav>
+      <ul>
+        <li><a href="/">Главная</a></li>
+      </ul>
+    </nav>
+  </header>
+    <div class="container">
+        <h1>Баланс предприятия</h1>
+        <label for="enterprise"><b>Выберите предприятие:</b></label>
+        <select id="enterprise" onchange="fetchBalance()">
+            {% for id, name in enterprises %}
+                <option value="{{ id }}">{{ name }}</option>
+            {% endfor %}
+        </select>
+
+        <h2>Баланс сырья</h2>
+        <table id="raw-material-balance">
+            <tr><th>Сырьё</th><th>Необходимо</th><th>Поставлено</th><th>Разница</th></tr>
+        </table>
+
+        <h2>Баланс продукции</h2>
+        <table id="product-balance">
+            <tr><th>Продукт</th><th>Произведено</th><th>Доставлено</th><th>Разница</th></tr>
+        </table>
+    </div>
+  <script>
+        function fetchBalance() {
+            let enterpriseId = document.getElementById("enterprise").value;
+
+            fetch("/get_balance", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ enterprise_id: enterpriseId })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    alert("Ошибка: " + data.error);
+                    return;
+                }
+
+                let rawTable = document.getElementById("raw-material-balance");
+                let productTable = document.getElementById("product-balance");
+
+                rawTable.innerHTML = "<tr><th>Сырьё</th><th>Необходимо</th><th>Поставлено</th><th>Разница</th></tr>";
+                productTable.innerHTML = "<tr><th>Продукт</th><th>Произведено</th><th>Доставлено</th><th>Разница</th></tr>";
+
+                data.raw_material.forEach(row => {
+                    let statusClass = row[3] === "✓" ? "status-ok" : (row[3].startsWith("+") ? "status-warning" : "status-danger");
+                    rawTable.innerHTML += `<tr><td>${row[0]}</td><td>${row[1]}</td><td>${row[2]}</td><td class="${statusClass}">${row[3]}</td></tr>`;
+                });
+
+                data.product.forEach(row => {
+                    let statusClass = row[3] === "✓" ? "status-ok" : (row[3].startsWith("+") ? "status-warning" : "status-danger");
+                    productTable.innerHTML += `<tr><td>${row[0]}</td><td>${row[1]}</td><td>${row[2]}</td><td class="${statusClass}">${row[3]}</td></tr>`;
+                });
+            })
+            .catch(error => console.error("Ошибка запроса:", error));
+        }
+    </script>
+</body>
+</html>
+
+
+<!--<!DOCTYPE html>-->
+<!--<html lang="ru">-->
+<!--<head>-->
+<!--    <meta charset="UTF-8">-->
+<!--    <meta name="viewport" content="width=device-width, initial-scale=1.0">-->
+<!--    <title>Баланс предприятия</title>-->
+<!--    <style>-->
+<!--        body {-->
+<!--            font-family: Arial, sans-serif;-->
+<!--            margin: 20px;-->
+<!--            padding: 20px;-->
+<!--            background-color: #f4f4f4;-->
+<!--        }-->
+<!--        h1, h2 {-->
+<!--            text-align: center;-->
+<!--        }-->
+<!--        .container {-->
+<!--            width: 80%;-->
+<!--            margin: 0 auto;-->
+<!--            background: white;-->
+<!--            padding: 20px;-->
+<!--            border-radius: 10px;-->
+<!--            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);-->
+<!--        }-->
+<!--        select {-->
+<!--            width: 100%;-->
+<!--            padding: 10px;-->
+<!--            margin-bottom: 20px;-->
+<!--            font-size: 16px;-->
+<!--        }-->
+<!--        table {-->
+<!--            width: 100%;-->
+<!--            border-collapse: collapse;-->
+<!--            margin-top: 10px;-->
+<!--        }-->
+<!--        th, td {-->
+<!--            padding: 10px;-->
+<!--            border: 1px solid #ddd;-->
+<!--            text-align: center;-->
+<!--        }-->
+<!--        th {-->
+<!--            background-color: #4CAF50;-->
+<!--            color: white;-->
+<!--        }-->
+<!--        .status-ok {-->
+<!--            color: green;-->
+<!--            font-weight: bold;-->
+<!--        }-->
+<!--        .status-warning {-->
+<!--            color: orange;-->
+<!--            font-weight: bold;-->
+<!--        }-->
+<!--        .status-danger {-->
+<!--            color: red;-->
+<!--            font-weight: bold;-->
+<!--        }-->
+<!--    </style>-->
+<!--    <script>-->
+<!--        function fetchBalance() {-->
+<!--            let enterpriseId = document.getElementById("enterprise").value;-->
+
+<!--            fetch("/get_balance", {-->
+<!--                method: "POST",-->
+<!--                headers: { "Content-Type": "application/x-www-form-urlencoded" },-->
+<!--                body: "enterprise_id=" + encodeURIComponent(enterpriseId)-->
+<!--            })-->
+<!--            .then(response => response.json())-->
+<!--            .then(data => {-->
+<!--                if (data.error) {-->
+<!--                    alert("Ошибка: " + data.error);-->
+<!--                    return;-->
+<!--                }-->
+
+<!--                let rawTable = document.getElementById("raw-material-balance");-->
+<!--                let productTable = document.getElementById("product-balance");-->
+
+<!--                rawTable.innerHTML = "<tr><th>Сырьё</th><th>Необходимо</th><th>Поставлено</th><th>Разница</th></tr>";-->
+<!--                productTable.innerHTML = "<tr><th>Продукт</th><th>Произведено</th><th>Доставлено</th><th>Разница</th></tr>";-->
+
+<!--                data.raw_material.forEach(row => {-->
+<!--                    let statusClass = row[3] === "✓" ? "status-ok" : (row[3].startsWith("+") ? "status-warning" : "status-danger");-->
+<!--                    rawTable.innerHTML += `<tr><td>${row[0]}</td><td>${row[1]}</td><td>${row[2]}</td><td class="${statusClass}">${row[3]}</td></tr>`;-->
+<!--                });-->
+
+<!--                data.product.forEach(row => {-->
+<!--                    let statusClass = row[3] === "✓" ? "status-ok" : (row[3].startsWith("+") ? "status-warning" : "status-danger");-->
+<!--                    productTable.innerHTML += `<tr><td>${row[0]}</td><td>${row[1]}</td><td>${row[2]}</td><td class="${statusClass}">${row[3]}</td></tr>`;-->
+<!--                });-->
+<!--            })-->
+<!--            .catch(error => console.error("Ошибка запроса:", error));-->
+<!--        }-->
+<!--    </script>-->
+<!--</head>-->
+<!--<body>-->
+<!--    <div class="container">-->
+<!--        <h1>Баланс предприятия</h1>-->
+<!--        <label for="enterprise"><b>Выберите предприятие:</b></label>-->
+<!--        <select id="enterprise" onchange="fetchBalance()">-->
+<!--            {% for id, name in enterprises %}-->
+<!--                <option value="{{ id }}">{{ name }}</option>-->
+<!--            {% endfor %}-->
+<!--        </select>-->
+
+<!--        <h2>Баланс сырья</h2>-->
+<!--        <table id="raw-material-balance">-->
+<!--            <tr><th>Сырьё</th><th>Необходимо</th><th>Поставлено</th><th>Разница</th></tr>-->
+<!--        </table>-->
+
+<!--        <h2>Баланс продукции</h2>-->
+<!--        <table id="product-balance">-->
+<!--            <tr><th>Продукт</th><th>Произведено</th><th>Доставлено</th><th>Разница</th></tr>-->
+<!--        </table>-->
+<!--    </div>-->
+<!--</body>-->
+<!--</html>-->

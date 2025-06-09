@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Управление поставщиками</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f0f5f3;
+            color: #2c5b4b;
+        }
+
+        header {
+            background-color: #6dbd9e;
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+
+        nav ul {
+            list-style-type: none;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+        }
+
+        nav li {
+            margin: 0 10px;
+        }
+
+        nav a {
+            color: white;
+            text-decoration: none;
+        }
+
+        main {
+            padding: 20px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+
+        th, td {
+            padding: 8px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+
+        tr:hover {
+            background-color: #e5f2ed;
+        }
+
+        button {
+            background-color: #6dbd9e;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+
+        button:hover {
+            background-color: #54a685;
+        }
+
+        #map {
+            height: 400px;
+            margin-bottom: 20px;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .table-container {
+            width: 80%;
+            margin-bottom: 20px;
+        }
+
+        .form-container {
+            display: none;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .dropdown-container {
+            margin-bottom: 20px;
+        }
+
+    </style>
+</head>
+<header>
+    <nav>
+        <ul>
+            <li><a href="/">Главная</a></li>
+        </ul>
+    </nav>
+</header>
+<body>
+
+    <h1>Управление поставщиками</h1>
+    <div id="map"></div>
+
+    <h2>Информация о древесине</h2>
+    <table id="info">
+        <thead>
+            <tr>
+                <th>Название</th>
+                <th>Порода</th>
+                <th>Длина (м)</th>
+                <th>Диаметр (см)</th>
+                <th>Качество</th>
+                <th>Участок</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for species in timber_species %}
+            <tr>
+                <td>{{ species.name }}</td>
+                <td>{{ species.species }}</td>
+                <td>{{ species.length }}</td>
+                <td>{{ species.diameter }}</td>
+                <td>{{ species.quality }}</td>
+                <td>{{ species.area_name }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <script>
+        var map = L.map('map').setView([61.24, 33.90], 7);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(map);
+
+        var suppliers = {{ suppliers | tojson }};
+        var areas = {{ logging_areas | tojson }};
+
+        // Добавляем маркеры поставщиков
+        suppliers.forEach(s => {
+            L.marker([s.location.lat, s.location.lng], {icon: L.icon({iconUrl: 'supplier_icon.png', iconSize: [25, 25]})})
+                .addTo(map)
+                .bindPopup(`<b>${s.name}</b>`);
+        });
+
+        // Добавляем полигоны участков
+        areas.forEach(a => {
+            let polygon = L.polygon(a.polygon, {color: 'green'}).addTo(map);
+            polygon.bindPopup(`<b>${a.name}</b>`);
+        });
+    </script>
+</body>
+</html>
+
+
+
+
+<!--<!DOCTYPE html>-->
+<!--<html lang="ru">-->
+<!--<head>-->
+<!--    <meta charset="UTF-8">-->
+<!--    <meta name="viewport" content="width=device-width, initial-scale=1.0">-->
+<!--    <title>Управление поставщиками</title>-->
+<!--    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />-->
+<!--    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>-->
+<!--    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>-->
+<!--    <style>-->
+<!--        #map { height: 500px; width: 100%; }-->
+<!--        #info { margin-top: 10px; width: 100%; border-collapse: collapse; }-->
+<!--        #info th, #info td { border: 1px solid black; padding: 5px; text-align: center; }-->
+<!--        #info th { background-color: #f4f4f4; }-->
+<!--    </style>-->
+<!--</head>-->
+<!--<body>-->
+
+<!--    <h1>Управление поставщиками</h1>-->
+<!--    <div id="map"></div>-->
+
+<!--    <h2>Информация о древесине</h2>-->
+<!--    <table id="info">-->
+<!--        <thead>-->
+<!--            <tr>-->
+<!--                <th>Название</th>-->
+<!--                <th>Порода</th>-->
+<!--                <th>Длина (м)</th>-->
+<!--                <th>Диаметр (см)</th>-->
+<!--                <th>Качество</th>-->
+<!--            </tr>-->
+<!--        </thead>-->
+<!--        <tbody></tbody>-->
+<!--    </table>-->
+
+<!--    <script>-->
+<!--        var map = L.map('map').setView([61.24, 33.90], 7);-->
+<!--        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {-->
+<!--            attribution: '&copy; OpenStreetMap contributors'-->
+<!--        }).addTo(map);-->
+
+<!--        var suppliers = {{ suppliers | tojson }};-->
+<!--        var areas = {{ logging_areas | tojson }};-->
+
+<!--        // Добавляем маркеры поставщиков-->
+<!--        suppliers.forEach(s => {-->
+<!--            L.marker([s.location.lat, s.location.lng], {icon: L.icon({iconUrl: 'supplier_icon.png', iconSize: [25, 25]})})-->
+<!--                .addTo(map)-->
+<!--                .bindPopup(`<b>${s.name}</b>`);-->
+<!--        });-->
+
+<!--        // Добавляем полигоны участков-->
+<!--        areas.forEach(a => {-->
+<!--            let polygon = L.polygon(a.polygon, {color: 'green'}).addTo(map);-->
+<!--            polygon.bindPopup(`<b>${a.name}</b>`);-->
+<!--            polygon.on('click', function () {-->
+<!--                fetch(`/get_timber_species/${a.id}`)-->
+<!--                    .then(response => response.json())-->
+<!--                    .then(data => {-->
+<!--                        let tbody = document.querySelector("#info tbody");-->
+<!--                        tbody.innerHTML = "";-->
+<!--                        if (data.length === 0) {-->
+<!--                            tbody.innerHTML = "<tr><td colspan='5'>Нет данных</td></tr>";-->
+<!--                        } else {-->
+<!--                            data.forEach(d => {-->
+<!--                                let row = `<tr>-->
+<!--                                    <td>${d.name}</td>-->
+<!--                                    <td>${d.species}</td>-->
+<!--                                    <td>${d.length}</td>-->
+<!--                                    <td>${d.diameter}</td>-->
+<!--                                    <td>${d.quality}</td>-->
+<!--                                </tr>`;-->
+<!--                                tbody.innerHTML += row;-->
+<!--                            });-->
+<!--                        }-->
+<!--                    })-->
+<!--                    .catch(error => console.error('Ошибка загрузки данных:', error));-->
+<!--            });-->
+<!--        });-->
+<!--    </script>-->
+<!--</body>-->
+<!--</html>-->
